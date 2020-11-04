@@ -1,0 +1,22 @@
+{
+  "name": "dashboard-express-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.17.1",
+    "helmet": "^3.23.3",
+    "loglevel": "^1.7.0",
+    "loglevel-format": "^1.1.2",
+    "mysql2": "^2.2.5",
+    "nodemon": "^2.0.6",
+    "sequelize": "^6.3.5",
+    "sqlstring": "^2.3.2"
+  }
+}
