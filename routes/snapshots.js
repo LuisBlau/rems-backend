@@ -36,7 +36,7 @@ function formatReloads(response, log, connection, res) {
           ...result
         }
       }
-      connection.promise().query("Select * from Snapshots")
+      connection.promise().query("SELECT * FROM Snapshots ORDER BY snaptime DESC")
         .then((snapshots) =>  {
           let collection = {}
           snapshots[0].forEach(snapshot => {
