@@ -32,11 +32,12 @@ app.use(cors())
 const mysql = require('mysql2')
 let {DB, HOST, PASSWORD, USER} = require('./db.config')
 
-const connection = mysql.createConnection({
+const connection = mysql.createPool({
   host: HOST,
   user: USER,
   password: PASSWORD,
-  database: DB
+  database: DB,
+  waitForConnections: true
 })
 
 require('./routes')(app, connection, log);

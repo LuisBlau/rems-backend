@@ -1,4 +1,5 @@
 const sqlString = require('sqlstring')
+const lodashDeepClone = require("lodash.clonedeep")
 
 function formatCount(resp) {
   count_dict = []
@@ -8,16 +9,54 @@ function formatCount(resp) {
   })))
 }
 
-function logSuccess(req, res, log) {
-  log.info(`GET ${req.originalUrl}`)
+async function getProperties(connection, log) {
+  let properties
+  return connection.promise().query("Select * from Properties WHERE property_id >= 0 ")
+    .then((response) => {
+      return response[0]
+    }).catch((err) => {
+      return null
+    })
 }
 
-function hasInfo(header) {
-  if (header === 'null' ||
-    header === null ||
-    header === '') {
-    return false
-  } else return true
+function formatReloads(response, log, connection, res) {
+  connection.promise().query("Select * from Properties WHERE property_id >= 0 ")
+    .then((props) => {
+
+      var result = props[0].reduce(function(obj, x) {
+        obj[x["property_id"]] = "";
+        return obj;
+      }, {});
+
+      let copyablePropObject = {
+        "country": null,
+        "register": null,
+        "store": null,
+        "props": {
+          ...result
+        }
+      }
+      connection.promise().query("Select * from Snapshots")
+        .then((snapshots) =>  {
+          let collection = {}
+          snapshots[0].forEach(snapshot => {
+            if (!(snapshot["snaptime"] in collection)) {
+              collection[snapshot["snaptime"]] = lodashDeepClone(copyablePropObject)
+              collection[snapshot["snaptime"]]["country"] = snapshot["country_id"]
+              collection[snapshot["snaptime"]]["register"] = snapshot["register"]
+              collection[snapshot["snaptime"]]["store"] = snapshot["store"]
+            } else {
+              collection[snapshot["snaptime"]]["props"][snapshot["property_id"]] = snapshot["property_value"]
+            }
+          })
+          res.send(collection)
+        })
+    })
+
+}
+
+function logSuccess(req, res, log) {
+  log.info(`GET ${req.originalUrl}`)
 }
 
 function formatClauses(req) {
@@ -43,17 +82,17 @@ module.exports = function (app, connection, log) {
           res.send(err)
         } else {
           logSuccess(req, res, log)
+
           res.send(resp)
         }
       })
   })
 
-// TODO replace 'Snapshots" with "Snapshots" whenever they start working again
   app.get('/snapshots/reloads/', (req, res) => {
     const {storeClause, timeClause} = formatClauses(req)
-    const query = 'SELECT COUNT(*) ' +
+    const query = 'SELECT COUNT(DISTINCT snaptime) ' +
       'FROM Snapshots ' +
-      'WHERE Snapshots.property_id = \'12\' ' +
+      'WHERE Snapshots.logtime <= ( CURDATE() ) ' +
       storeClause +
       timeClause
     log.debug(query)
@@ -65,7 +104,7 @@ module.exports = function (app, connection, log) {
         } else {
           logSuccess(req, res, log)
           res.send({
-            "count": resp[0]["COUNT(*)"]
+            "count": resp[0]["COUNT(DISTINCT snaptime)"]
           })
         }
       })
@@ -139,5 +178,40 @@ module.exports = function (app, connection, log) {
       })
   })
 
+  app.get('/snapshots/properties', (req, res) => {
+    const {storeClause, timeClause} = formatClauses(req)
+    const query = sqlString.format('SELECT * from Properties ' +
+      'WHERE property_id >= 0 ' + storeClause + timeClause);
+    log.debug(query)
+
+    connection.query(query,
+      (err, resp, fields) => {
+        if (err) {
+          log.error(err)
+          res.send({"status": "error"})
+        } else {
+          logSuccess(req, res, log)
+          res.send(resp)
+        }
+      })
+  })
+
+  app.get('/snapshots/snaptime', (req, res) => {
+    connection.query('SELECT * FROM Snapshots limit 5',
+      (err, resp, fields) => {
+        if (err) {
+          log.error(err)
+          res.send({"status": "error"})
+        } else {
+          logSuccess(req, res, log)
+          formatReloads(resp, log, connection, res)
+        }
+      })
+  })
+
+  app.get("/snapshots/testProps", (req, res) => {
+    getProperties(connection, log)
+      .then((properties) => res.send(properties))
+  })
 
 }

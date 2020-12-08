@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/Dashboard-Express-Server.iml" filepath="$PROJECT_DIR$/.idea/Dashboard-Express-Server.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../nextjs/.idea/nextjs.iml" filepath="$PROJECT_DIR$/../nextjs/.idea/nextjs.iml" />
     </modules>
   </component>
 </project>
