@@ -1,3 +1,5 @@
+import {store} from "next/dist/build/output/store";
+
 const sqlString = require('sqlstring')
 const lodashDeepClone = require("lodash.clonedeep")
 
@@ -32,24 +34,34 @@ function formatReloads(response, log, connection, res) {
         "country": null,
         "register": null,
         "store": null,
+        "datetime": null,
         "props": {
           ...result
         }
       }
-      connection.promise().query("SELECT * FROM Snapshots ORDER BY snaptime DESC")
+      const {storeClause, timeClause} = formatClauses(req)
+      connection.promise().query("SELECT * FROM Snapshots " +
+        "WHERE property_id >= 0  " +
+        storeClause + timeClause +
+        "ORDER BY snaptime DESC LIMIT 750")
         .then((snapshots) =>  {
           let collection = {}
+          let final = []
           snapshots[0].forEach(snapshot => {
             if (!(snapshot["snaptime"] in collection)) {
               collection[snapshot["snaptime"]] = lodashDeepClone(copyablePropObject)
               collection[snapshot["snaptime"]]["country"] = snapshot["country_id"]
               collection[snapshot["snaptime"]]["register"] = snapshot["register"]
               collection[snapshot["snaptime"]]["store"] = snapshot["store"]
+              collection[snapshot["snaptime"]]["datetime"] = snapshot["snaptime"]
             } else {
               collection[snapshot["snaptime"]]["props"][snapshot["property_id"]] = snapshot["property_value"]
             }
           })
-          res.send(collection)
+          Object.keys(collection).forEach((snaptime) => {
+            final.push(collection[snaptime])
+          })
+          res.send(final)
         })
     })
 
