@@ -1,4 +1,3 @@
-import {store} from "next/dist/build/output/store";
 
 const sqlString = require('sqlstring')
 const lodashDeepClone = require("lodash.clonedeep")
@@ -21,7 +20,7 @@ async function getProperties(connection, log) {
     })
 }
 
-function formatReloads(response, log, connection, res) {
+function formatReloads(req, log, connection, res) {
   connection.promise().query("Select * from Properties WHERE property_id >= 0 ")
     .then((props) => {
 
@@ -39,11 +38,12 @@ function formatReloads(response, log, connection, res) {
           ...result
         }
       }
-      const {storeClause, timeClause} = formatClauses(req)
+      let {storeClause, timeClause} = formatClauses(req)
+      log.info(req.get("hours"))
       connection.promise().query("SELECT * FROM Snapshots " +
         "WHERE property_id >= 0  " +
         storeClause + timeClause +
-        "ORDER BY snaptime DESC LIMIT 750")
+        "ORDER BY snaptime DESC")
         .then((snapshots) =>  {
           let collection = {}
           let final = []
@@ -203,7 +203,7 @@ module.exports = function (app, connection, log) {
           res.send({"status": "error"})
         } else {
           logSuccess(req, res, log)
-          res.send(resp)
+          res.send(resp.sort((a,b) => (a.property_id > b.property_id) ? 1: -1))
         }
       })
   })
@@ -216,7 +216,7 @@ module.exports = function (app, connection, log) {
           res.send({"status": "error"})
         } else {
           logSuccess(req, res, log)
-          formatReloads(resp, log, connection, res)
+          formatReloads(req, log, connection, res)
         }
       })
   })
