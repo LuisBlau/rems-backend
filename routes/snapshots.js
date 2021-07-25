@@ -4,7 +4,7 @@ const lodashDeepClone = require("lodash.clonedeep")
 
 function formatCount(resp) {
   count_dict = []
-  return resp.map(element => (({
+  return resp.rows.map(element => (({
     "name": element["property_value"],
     "value": element["count(property_value)"]
   })))
@@ -12,19 +12,22 @@ function formatCount(resp) {
 
 async function getProperties(connection, log) {
   let properties
-  return connection.promise().query("Select * from Properties WHERE property_id >= 0 ")
+  return connection.query("Select * from Properties WHERE property_id >= 0 ")
     .then((response) => {
-      return response[0]
+      return response.rows
     }).catch((err) => {
       return null
     })
 }
 
 function formatReloads(req, log, connection, res) {
-  connection.promise().query("Select * from Properties WHERE property_id >= 0 ")
+  connection.query("Select * from properties WHERE property_id >= 0 ")
     .then((props) => {
-
-      var result = props[0].reduce(function(obj, x) {
+      
+      if (props === undefined)
+        return null;
+      
+      var result = props.rows.reduce(function(obj, x) {
         obj[x["property_id"]] = "";
         return obj;
       }, {});
@@ -40,14 +43,14 @@ function formatReloads(req, log, connection, res) {
       }
       let {storeClause, timeClause} = formatClauses(req)
       log.info(req.get("hours"))
-      connection.promise().query("SELECT * FROM Snapshots " +
+      connection.query("SELECT * FROM Snapshots " +
         "WHERE property_id >= 0  " +
         storeClause + timeClause +
         "ORDER BY snaptime DESC")
         .then((snapshots) =>  {
           let collection = {}
           let final = []
-          snapshots[0].forEach(snapshot => {
+          snapshots.rows.forEach(snapshot => {
             if (!(snapshot["snaptime"] in collection)) {
               collection[snapshot["snaptime"]] = lodashDeepClone(copyablePropObject)
               collection[snapshot["snaptime"]]["country"] = snapshot["country_id"]
@@ -64,7 +67,6 @@ function formatReloads(req, log, connection, res) {
           res.send(final)
         })
     })
-
 }
 
 function logSuccess(req, res, log) {
@@ -72,7 +74,7 @@ function logSuccess(req, res, log) {
 }
 
 function formatClauses(req) {
-  const timeClause = parseInt(req.get("hours")) > 0 ? sqlString.format('and Snapshots.logtime >= ( CURDATE() - INTERVAL ? HOUR ) ', req.get("hours")) : ''
+  const timeClause = parseInt(req.get("hours")) > 0 ? sqlString.format('and Snapshots.logtime >= ( current_date - interval \'? hours\' ) ', parseInt(req.get("hours"))) : ''
   const storeClause = parseInt(req.get("store")) > 0 ? sqlString.format('and Snapshots.store = ? ', req.get("store")) : ''
   return {timeClause, storeClause}
 }
@@ -104,7 +106,7 @@ module.exports = function (app, connection, log) {
     const {storeClause, timeClause} = formatClauses(req)
     const query = 'SELECT COUNT(DISTINCT snaptime) ' +
       'FROM Snapshots ' +
-      'WHERE Snapshots.logtime <= ( CURDATE() ) ' +
+      'WHERE Snapshots.logtime <= ( current_date ) ' +
       storeClause +
       timeClause
     log.debug(query)
@@ -116,7 +118,7 @@ module.exports = function (app, connection, log) {
         } else {
           logSuccess(req, res, log)
           res.send({
-            "count": resp[0]["COUNT(DISTINCT snaptime)"]
+            "count": resp.rows["COUNT(DISTINCT snaptime)"]
           })
         }
       })
@@ -154,7 +156,7 @@ module.exports = function (app, connection, log) {
       'ON Snapshots.property_id = Properties.property_id ' +
       'WHERE Snapshots.property_id = 1 ' + storeClause + timeClause +
       'GROUP BY Snapshots.property_value'
-
+    
     log.debug(query)
 
     connection.query(query,
@@ -203,7 +205,9 @@ module.exports = function (app, connection, log) {
           res.send({"status": "error"})
         } else {
           logSuccess(req, res, log)
-          res.send(resp.sort((a,b) => (a.property_id > b.property_id) ? 1: -1))
+          console.log(resp);
+          console.log("boom");
+          res.send(resp.rows.sort((a,b) => (a.property_id > b.property_id) ? 1: -1))
         }
       })
   })

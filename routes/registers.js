@@ -14,7 +14,7 @@ function formatCount(resp) {
 }
 
 function formatClauses(req) {
-  const timeClause = req.get("hours") > 0 ? sqlString.format('and Snapshots.logtime >= ( CURDATE() - INTERVAL ? HOUR ) ', req.get("hours")) : ''
+  const timeClause = req.get("hours") > 0 ? sqlString.format('and Snapshots.logtime >= ( current_date - interval \'? hours\' ) ', parseInt(req.get("hours"))) : ''
   const storeClause = req.get("store") > 0 ? sqlString.format('and Snapshots.store = ? ', req.get("store")) : ''
   return {timeClause, storeClause}
 }
@@ -47,7 +47,7 @@ module.exports = function (app, connection, log) {
       'WHERE Registers.property_id = \'12\' ' +
       storeClause +
       timeClause +
-      'and Registers.logtime >= ( CURDATE() - INTERVAL ? DAY )',
+      'and Registers.logtime >= ( current_date - interval \'? days\' )',
       [req.params["lastdays"]]),
       (err, resp, fields) => {
         if (err) {

@@ -32,12 +32,13 @@ app.use(cors())
 const mysql = require('mysql2')
 let {DB, HOST, PASSWORD, USER} = require('./db.config')
 
-const connection = mysql.createPool({
-  host: HOST,
-  user: USER,
-  password: PASSWORD,
-  database: DB,
-  waitForConnections: true
+const { Pool } = require('pg')
+const connection = new Pool({
+  user: 'logstash',
+  host: '10.89.196.162',
+  database: 'wpstatus',
+  password: 'skywalker',
+  port: 5432,
 })
 
 require('./routes')(app, connection, log);
