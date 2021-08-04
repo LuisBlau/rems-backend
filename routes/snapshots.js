@@ -6,7 +6,7 @@ function formatCount(resp) {
   count_dict = []
   return resp.rows.map(element => (({
     "name": element["property_value"],
-    "value": element["count(property_value)"]
+    "value": element["count"]
   })))
 }
 
@@ -74,7 +74,7 @@ function logSuccess(req, res, log) {
 }
 
 function formatClauses(req) {
-  const timeClause = parseInt(req.get("hours")) > 0 ? sqlString.format('and Snapshots.logtime >= ( current_date - interval \'? hours\' ) ', parseInt(req.get("hours"))) : ''
+  const timeClause = parseInt(req.get("hours")) > 0 ? sqlString.format('and Snapshots.snaptime >= ( current_date - interval \'? hours\' ) ', parseInt(req.get("hours"))) : ''
   const storeClause = parseInt(req.get("store")) > 0 ? sqlString.format('and Snapshots.store = ? ', req.get("store")) : ''
   return {timeClause, storeClause}
 }
