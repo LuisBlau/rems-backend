@@ -205,8 +205,6 @@ module.exports = function (app, connection, log) {
           res.send({"status": "error"})
         } else {
           logSuccess(req, res, log)
-          console.log(resp);
-          console.log("boom");
           res.send(resp.rows.sort((a,b) => (a.property_id > b.property_id) ? 1: -1))
         }
       })
