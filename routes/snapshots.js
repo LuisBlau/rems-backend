@@ -76,7 +76,7 @@ function logSuccess(req, res, log) {
 function formatClauses(req) {
   const timeClause = parseInt(req.get("hours")) > 0 ? sqlString.format('and Snapshots.snaptime >= ( current_date - interval \'? hours\' ) ', parseInt(req.get("hours"))) : ''
   const storeClause = parseInt(req.get("store")) > 0 ? sqlString.format('and Snapshots.store = ? ', req.get("store")) : ''
-  const countryClause = req.get("country") == "ca" ? sqlString.format('and Snapshots.country_id = 3 ') : (req.get("country")  == "us" ? sqlString.format('and Snapshots.country_id = 0 ') : '')
+  const countryClause = req.get("country") == "ca" ? sqlString.format('and Snapshots.country_id = 3 ') : (req.get("country")  == "us" ? sqlString.format('and Snapshots.country_id in (0,97) ') : '')
   return {timeClause, storeClause, countryClause}
 }
 
