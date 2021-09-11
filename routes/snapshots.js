@@ -87,7 +87,6 @@ function formatClauses(req) {
   const countryClause = req.get("country") == "ca" ? sqlString.format('and Snapshots.country_id = 3 ') : (req.get("country")  == "us" ? sqlString.format('and Snapshots.country_id in (0,97) ') : '')
   const versionClause = (req.get("version")) ? sqlString.format('INNER JOIN public.snapshots snap ON snap.country_id=this.country_id '+
           'AND snap.store=this.store AND snap.snaptime=this.snaptime WHERE snap.property_id=\'33\' AND snap.property_value LIKE ? ', req.get("version") ) : ''
-  console.log(versionClause)
   return {timeClause, storeClause, countryClause, versionClause}
 }
 
