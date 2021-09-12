@@ -10,6 +10,14 @@ function formatCount(resp) {
   })))
 }
 
+function formatVersion(resp) {
+    versions = []
+    resp.rows.forEach(function(rows) {
+      versions.push(rows.property_value)
+      });
+    return versions
+}
+
 async function getProperties(connection, log) {
   let properties
   return connection.query("Select * from Properties WHERE property_id >= 0 ")
@@ -77,13 +85,15 @@ function formatClauses(req) {
   const timeClause = parseInt(req.get("hours")) > 0 ? sqlString.format('and Snapshots.snaptime >= ( current_date - interval \'? hours\' ) ', parseInt(req.get("hours"))) : ''
   const storeClause = parseInt(req.get("store")) > 0 ? sqlString.format('and Snapshots.store = ? ', req.get("store")) : ''
   const countryClause = req.get("country") == "ca" ? sqlString.format('and Snapshots.country_id = 3 ') : (req.get("country")  == "us" ? sqlString.format('and Snapshots.country_id in (0,97) ') : '')
-  return {timeClause, storeClause, countryClause}
+  const versionClause = (req.get("version")) ? sqlString.format('INNER JOIN public.snapshots snap ON snap.country_id=this.country_id '+
+          'AND snap.store=this.store AND snap.snaptime=this.snaptime WHERE snap.property_id=\'33\' AND snap.property_value LIKE ? ', req.get("version") ) : ''
+  return {timeClause, storeClause, countryClause, versionClause}
 }
 
 module.exports = function (app, connection, log) {
 
   app.get('/snapshots/:storenum-:regnum', (req, res) => {
-    const {storeClause, timeClause, countryClause} = formatClauses(req)
+    const {storeClause, timeClause, countryClause, versionClause} = formatClauses(req)
 
     connection.query(sqlString.format('SELECT * FROM Snapshots ' +
       'INNER JOIN Properties ON Snapshots.property_id = Properties.property_id ' +
@@ -125,17 +135,37 @@ module.exports = function (app, connection, log) {
       })
   })
 
-  app.get('/snapshots/pinpad', (req, res) => {
-    const {storeClause, timeClause, countryClause} = formatClauses(req)
-
-    const query = 'SELECT property_value, count(property_value) ' +
-      'FROM Snapshots INNER JOIN Properties ' +
-      'ON Snapshots.property_id = Properties.property_id ' +
-      'WHERE Snapshots.property_id = 9 ' + storeClause + timeClause + countryClause +
-      'GROUP BY Snapshots.property_value'
+  app.get('/snapshots/versions', (req, res) => {
+    const query = 'SELECT snap.property_value ' +
+      'FROM public.registers snap WHERE snap.property_id=33 ' +
+      'AND logtime > current_date - interval \'14 days\' ' +
+      'AND country_id not in (98, 99) ' +
+      'GROUP by property_value ORDER BY property_value desc'
 
     log.debug(query)
 
+    connection.query(query,
+      (err, resp, fields) => {
+        if (err) {
+          log.error(err)
+          res.send(err)
+        } else {
+          logSuccess(req, res, log)
+          console.log(formatVersion(resp))
+          res.send(formatVersion(resp))
+        }
+      })
+  })
+    
+  app.get('/snapshots/pinpad', (req, res) => {
+    const {storeClause, timeClause, countryClause, versionClause} = formatClauses(req)
+    const query = 'SELECT this.property_value, count(this.property_value) ' +
+      'FROM (SELECT snapshots.snaptime, snapshots.country_id, snapshots.store, ' +
+      'snapshots.property_value FROM public.snapshots ' +
+      'WHERE property_id=9 ' + storeClause + timeClause + countryClause +
+      ') AS this ' + versionClause +
+      'GROUP BY 1 ORDER BY 1 DESC'
+    log.debug(query)
 
     connection.query(query,
       (err, resp, fields) => {
@@ -150,14 +180,12 @@ module.exports = function (app, connection, log) {
   })
 
   app.get('/snapshots/uiState', (req, res) => {
-    const {storeClause, timeClause, countryClause} = formatClauses(req)
-
-    const query = 'SELECT property_value, count(property_value) ' +
-      'FROM Snapshots INNER JOIN Properties ' +
-      'ON Snapshots.property_id = Properties.property_id ' +
-      'WHERE Snapshots.property_id = 1 ' + storeClause + timeClause + countryClause +
-      'GROUP BY Snapshots.property_value'
-    
+    const {storeClause, timeClause, countryClause, versionClause} = formatClauses(req)
+    const query = 'SELECT this.property_value, count(this.property_value) ' +
+      'FROM (SELECT snapshots.snaptime, snapshots.country_id, snapshots.store, ' +
+      'snapshots.property_value FROM public.snapshots WHERE property_id = 1 ' +
+      storeClause + timeClause + countryClause + ') AS this ' + versionClause +
+      'GROUP BY 1 ORDER BY 1 DESC'
     log.debug(query)
 
     connection.query(query,
@@ -173,13 +201,15 @@ module.exports = function (app, connection, log) {
   })
 
   app.get('/snapshots/itemSubstate', (req, res) => {
-    const {storeClause, timeClause, countryClause} = formatClauses(req)
-    const query = sqlString.format('SELECT snapshots.property_value, count(*) FROM Snapshots ' +
-      'INNER JOIN Properties ON Snapshots.property_id = Properties.property_id ' +
-      'INNER JOIN Snapshots snap2 ON snap2.snaptime = Snapshots.snaptime ' +
-      'AND snap2.property_id = 1 AND snap2.property_value = \'item\' ' +
-      'WHERE Snapshots.property_id = 24 ' + storeClause + timeClause + countryClause +
-      'GROUP BY Snapshots.property_value ');
+    const {storeClause, timeClause, countryClause, versionClause} = formatClauses(req)
+    const query = 'SELECT this.property_value, count(this.property_value) ' +
+      'FROM (SELECT snapshots.snaptime, snapshots.country_id, snapshots.store, ' +
+      'snapshots.property_value FROM public.snapshots INNER JOIN public.snapshots snap2 ' +
+      'ON snap2.snaptime = snapshots.snaptime AND snap2.property_id = 1 AND snap2.property_value = \'item\' ' +
+      'WHERE snapshots.property_id = 24 ' + storeClause + timeClause + countryClause +
+      ') AS this ' + versionClause + 
+      'GROUP BY 1 ORDER BY 1 DESC'
+    
     log.debug(query)
 
     connection.query(query,
@@ -195,13 +225,14 @@ module.exports = function (app, connection, log) {
   })
 
   app.get('/snapshots/tenderSubstate', (req, res) => {
-    const {storeClause, timeClause, countryClause} = formatClauses(req)
-    const query = sqlString.format('SELECT snapshots.property_value, count(*) FROM Snapshots ' +
-      'INNER JOIN Properties ON Snapshots.property_id = Properties.property_id ' +
-      'INNER JOIN Snapshots snap2 ON snap2.snaptime = Snapshots.snaptime ' +
-      'AND snap2.property_id = 1 AND snap2.property_value = \'tender\' ' +
-      'WHERE Snapshots.property_id = 24 ' + storeClause + timeClause + countryClause +
-      'GROUP BY Snapshots.property_value ');
+    const {storeClause, timeClause, countryClause, versionClause} = formatClauses(req)
+    const query = 'SELECT this.property_value, count(this.property_value) ' +
+      'FROM (SELECT snapshots.snaptime, snapshots.country_id, snapshots.store, ' +
+      'snapshots.property_value FROM public.snapshots INNER JOIN public.snapshots snap2 ' +
+      'ON snap2.snaptime = snapshots.snaptime AND snap2.property_id = 1 AND snap2.property_value = \'tender\' ' +
+      'WHERE snapshots.property_id = 24 ' + storeClause + timeClause + countryClause +
+      ') AS this ' + versionClause + 
+      'GROUP BY 1 ORDER BY 1 DESC'
     log.debug(query)
 
     connection.query(query,
