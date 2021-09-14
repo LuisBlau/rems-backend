@@ -151,7 +151,6 @@ module.exports = function (app, connection, log) {
           res.send(err)
         } else {
           logSuccess(req, res, log)
-          console.log(formatVersion(resp))
           res.send(formatVersion(resp))
         }
       })
