@@ -8,7 +8,7 @@ function formatCount(resp) {
   count_dict = []
   return resp.map( element => (({
     "name": element["property_value"],
-    "value": element["count(property_value)"]
+    "value": element["count"]
   })))
 
 }
@@ -106,7 +106,8 @@ module.exports = function (app, connection, log) {
           res.send(JSON.stringify(err))
         } else {
           log.info(`GET ${req.originalUrl}`)
-          res.send(formatCount(resp))
+		  log.info(formatCount(resp['rows']))
+          res.send(formatCount(resp['rows']))
         }
       })
   })
