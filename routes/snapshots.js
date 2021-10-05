@@ -134,6 +134,28 @@ module.exports = function (app, connection, log) {
         }
       })
   })
+  
+  app.get('/snapshots/reloadstats/', (req, res) => {
+    const {storeClause, timeClause, countryClause} = formatClauses(req)
+    const query = ' SELECT extract(hour from snaptime), COUNT(extract(hour from snaptime))' +
+      'FROM Snapshots ' +
+      'WHERE Snapshots.snaptime <= ( current_date ) ' +
+      storeClause +
+      timeClause + countryClause + "GROUP BY extract(hour from snaptime)"
+    log.debug(query)
+    connection.query(query,
+      (err, resp, fields) => {
+        if (err) {
+          log.error(err)
+          res.send(err)
+        } else {
+          for (x of resp["rows"])
+            x["count"] = parseInt(x["count"])
+          logSuccess(req, res, log)
+          res.send(resp["rows"])
+        }
+      })
+  })
 
   app.get('/snapshots/versions', (req, res) => {
     const query = 'SELECT snap.property_value ' +
