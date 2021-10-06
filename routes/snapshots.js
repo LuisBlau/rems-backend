@@ -50,7 +50,10 @@ function formatReloads(req, log, connection, res) {
         }
       }
       let {storeClause, timeClause, countryClause} = formatClauses(req)
-      log.info(req.get("hours"))
+      log.info("SELECT * FROM Snapshots " +
+        "WHERE property_id >= 0  " +
+        storeClause + timeClause +
+        "ORDER BY snaptime DESC")
       connection.query("SELECT * FROM Snapshots " +
         "WHERE property_id >= 0  " +
         storeClause + timeClause +
@@ -139,7 +142,7 @@ module.exports = function (app, connection, log) {
     const {storeClause, timeClause, countryClause} = formatClauses(req)
     const query = ' SELECT extract(hour from snaptime), COUNT(extract(hour from snaptime))' +
       'FROM Snapshots ' +
-      'WHERE Snapshots.snaptime <= ( current_date ) ' +
+      'WHERE Snapshots.snaptime <= ( current_date ) and property_id=1' +
       storeClause +
       timeClause + countryClause + "GROUP BY extract(hour from snaptime)"
     log.debug(query)
