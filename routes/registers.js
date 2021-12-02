@@ -176,13 +176,15 @@ module.exports = function (app, connection, log) {
 
   app.get('/registers/extracts/:string', (req, res) => {
 	  j = JSON.parse(atob(req.params["string"]))
-	  msgSent = {"body": JSON.stringify({
-		  "retailer":j.retailer,
-		  "store":j.store, 
-		  "filename":j.values.file
-		})
+	  msgSent = {"body": {
+		  "retailer":j.Retailer,
+		  "store":j.Store, 
+		  "filename":j.values.File
+		}
 	  };
+	  console.log("Sending: "+JSON.stringify(msgSent));
     const sender = sbClient.createSender("storefilerequest");
     res.send(sender.sendMessages(msgSent));
   })
 }
+
