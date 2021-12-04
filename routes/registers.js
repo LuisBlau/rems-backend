@@ -182,9 +182,9 @@ module.exports = function (app, connection, log) {
 		  "filename":j.values.File
 		}
 	  };
-	  console.log("Sending: "+JSON.stringify(msgSent));
+	  console.log("Sending: "+msgSent);
     const sender = sbClient.createSender("storefilerequest");
-    res.send(sender.sendMessages(msgSent));
+	res.send(sender.sendMessages(msgSent));
   })
 }
 
