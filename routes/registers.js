@@ -163,6 +163,7 @@ module.exports = function (app, connection, log) {
 	for (var x of results) {
 		var y = x
 	    y["InStore"] = x["location"]["Store"]
+		y["Download"] = x["location"]["URL"]
 		y["Version"] = x["values"]["Version"]
 		y["SBreqLink"] = "http://wmpos2:3001/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
 		y["ExtractType"] = x["values"]["ExtractType"]
