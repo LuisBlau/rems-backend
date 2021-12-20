@@ -173,8 +173,87 @@ module.exports = function (app, connection, log) {
 	res.send(modifiedResults)
   });
   });
-  
 
+app.get('/registers/extracts', (req, res) => {
+/* 	var results = [{ 
+   "Retailer": "T0BGBBL",
+   "RegNum": "44",
+   "Store": "US0303",
+   "Timestamp": "2021/11/11 16:00:00",
+   "values": {
+     "File":"SCS_Extract_Lane_S303_L044_RMA Default Policy_20211028_164049_CST.zip",
+      "InstalledPath":"/cdrive/ext/signed/chec/IBMSelfCheckout",
+      "ExtractType":"Extract",
+	  "State":"Ohio"
+   },
+   "location": {
+      "Store":"true",
+      "Azure":"false",
+      "AzureUrl":""
+   }
+},
+{ 
+   "Retailer": "T0BGBBL",
+   "RegNum": "45",
+   "Store": "US0303",
+   "Timestamp": "2021/11/11 16:00:00",
+   "values": {
+     "File":"SCS_Extract_Lane_S303_L044_RMA Default Policy_20211028_164049_CST.zip",
+      "InstalledPath":"/cdrive/ext/signed/chec/IBMSelfCheckout",
+      "ExtractType":"Extract",
+	  "State":"Ohio"
+   },
+   "location": {
+      "Store":"true",
+      "Azure":"false",
+      "AzureUrl":""
+   }
+}
+] */
+   var results = []
+   var snapshots = azureClient.db("pas_reloads").collection("extracts");
+   snapshots.find().toArray(function(err, result){
+     results = result;
+     console.log(result)
+	let modifiedResults = []
+	for (var x of results) {
+		var y = x
+	    y["InStore"] = x["location"]["Store"]
+		y["Download"] = x["location"]["URL"]
+		y["Version"] = x["values"]["Version"]
+		y["SBreqLink"] = "http://wmpos2:3001/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
+		y["ExtractType"] = x["values"]["ExtractType"]
+		y["State"] = x["values"]["State"]
+		modifiedResults.push(y)
+	}
+	res.send(modifiedResults)
+  });
+  });
+app.get('/registers/dumps', (req, res) => {
+   var results = []
+   var snapshots = azureClient.db("pas_reloads").collection("dumps");
+   snapshots.find().toArray(function(err, result){
+     results = result;
+     console.log(result)
+	let modifiedResults = []
+	for (var x of results) {
+		var y = x
+		y["Download"] = x["location"]["URL"]
+		y["Version"] = x["values"]["Version"]
+		if(x["RegNum"]) {
+			y["System"] = x["RegNum"]
+		} else {
+			y["System"] = x["values"]["Controller ID"]
+		}
+		y["SBreqLink"] = "http://wmpos2:3001/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
+		y["ExtractType"] = x["values"]["ExtractType"]
+		y["State"] = x["values"]["State"]
+		y["Rids"] = x["values"]["rids"]
+		modifiedResults.push(y)
+	}
+	res.send(modifiedResults)
+  });
+  });
   app.get('/registers/extracts/:string', (req, res) => {
 	  j = JSON.parse(atob(req.params["string"]))
 	  msgSent = {"body": {
