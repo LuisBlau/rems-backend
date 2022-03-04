@@ -27,7 +27,6 @@ function readRetailerId() {
   });
 
   lineReader.on('line', function (line) {
-    console.log('Line from file:', line);
     if ( line.includes("retailer-torico-id") )
     {
         var values = line.split("=");
@@ -75,15 +74,15 @@ module.exports = function (app, connection, log) {
   app.post("/REMS/uploadfile", (req,res) => {
     console.log("request recieved")
     var form = new multiparty.Form();
+    var filename;
     form.parse(req, function(err, fields, files) {
-	  console.log(files);
-      console.log(fields);
-      res.writeHead(200, { 'content-type': 'text/plain' });
+	    res.writeHead(200, { 'content-type': 'text/plain' });
       res.write('received upload:\n\n');
       if (!fs.existsSync(uploadDir)){
         fs.mkdirSync(uploadDir);
       }
 	  let newFileName = uploadDir + "/" + files["file"][0].originalFilename
+    filename = files["file"][0].originalFilename;
 	  if(fs.existsSync(newFileName)) {
 	    newFileName = uploadDir + "/" + files["file"][0].originalFilename + Math.floor(+new Date() / 1000).toString()
 	  }
@@ -91,12 +90,36 @@ module.exports = function (app, connection, log) {
         if (err) throw err;
       });
     });
-  })
+
+    //query biggest index
+    var uploads = azureClient.db("pas_software_distribution").collection("uploads");
+    var results = [];
+    uploads.find({retailer_id:retailerId}).sort({id:-1}).limit(1).toArray(function(err, result){
+      results = result;
+      var index = results[0].id;
+      index++;
+    
+      var currentdate = new Date(); 
+      var datetime = currentdate.getFullYear() + "-"
+                + ((currentdate.getMonth()+1 < 10)?"0":"")+(currentdate.getMonth()+1) + "-"  
+                + ((currentdate.getDate() < 10)?"0":"")+currentdate.getDate() + " "  
+                + ((currentdate.getHours() < 10)?"0":"")+currentdate.getHours() + ":"  
+                + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"  
+                + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();  
+
+      var newFile = {id:index.toString(),retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false"};
+    
+      uploads.insertOne(newFile, function(err, res) {
+        if (err) throw err;
+      });
+
+    });
+
+  });
   
   app.get('/REMS/uploads', (req, res) => {
     var results = []
     var uploads = azureClient.db("pas_software_distribution").collection("uploads");
-    console.log("retailer "+retailerId)
     uploads.find( {retailer_id:retailerId}).toArray(function(err, result){
       results = result;
       console.log(result)
