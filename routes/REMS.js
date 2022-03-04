@@ -4,7 +4,7 @@ const path = require('path')
 const multiparty = require('multiparty');
 const fs = require('fs');
 const readline = require('readline');
-
+var bodyParser = require('body-parser')
 // setup dirs
 var uploadDir = process.env.REMS_HOME + "/uploads";
 
@@ -104,5 +104,9 @@ module.exports = function (app, connection, log) {
     res.send(results)
     });
   });
+  app.post('/sendCommand',bodyParser.json(), (req, res) => {
+    res.send('received upload:\n\n');
+    console.log(req.body)
+  })
 }
  
