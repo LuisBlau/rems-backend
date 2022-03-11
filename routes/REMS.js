@@ -82,16 +82,8 @@ module.exports = function (app, connection, log) {
         fs.mkdirSync(uploadDir);
       }
 
-      let newFileName = uploadDir + "/" + files["file"][0].originalFilename
-      console.log("newfilename:"+newFileName);
       baseFilename = files["file"][0].originalFilename;
-      console.log("filename:"+baseFilename);
-      if(fs.existsSync(newFileName)) {
-        newFileName = uploadDir + "/" + files["file"][0].originalFilename + Math.floor(+new Date() / 1000).toString()
-      }
-      fs.copyFile(files["file"][0].path, newFileName, (err) => {
-          if (err) throw err;
-        });
+        
     
 
       //query biggest index
@@ -119,6 +111,17 @@ module.exports = function (app, connection, log) {
         console.log("filename2:"+baseFilename);
         console.log("Json:"+JSON.stringify(newFile));
         uploads.insertOne(newFile, function(err, res) {
+          if (err) throw err;
+        });
+
+
+        let newFileName = uploadDir + "/" + index + ".upload"
+        console.log("newfilename:"+newFileName);
+        console.log("filename:"+baseFilename);
+        if(fs.existsSync(newFileName)) {
+          newFileName = uploadDir + "/" + files["file"][0].originalFilename + Math.floor(+new Date() / 1000).toString()
+        }
+        fs.copyFile(files["file"][0].path, newFileName, (err) => {
           if (err) throw err;
         });
 
