@@ -102,17 +102,17 @@ module.exports = function (app, connection, log) {
       results = result;
       var index = results[0].id;
       index++;
-    
-      var currentdate = new Date(); 
+
+      var currentdate = new Date();
       var datetime = currentdate.getFullYear() + "-"
-                + ((currentdate.getMonth()+1 < 10)?"0":"")+(currentdate.getMonth()+1) + "-"  
-                + ((currentdate.getDate() < 10)?"0":"")+currentdate.getDate() + " "  
-                + ((currentdate.getHours() < 10)?"0":"")+currentdate.getHours() + ":"  
-                + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"  
-                + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();  
+                + ((currentdate.getMonth()+1 < 10)?"0":"")+(currentdate.getMonth()+1) + "-"
+                + ((currentdate.getDate() < 10)?"0":"")+currentdate.getDate() + " "
+                + ((currentdate.getHours() < 10)?"0":"")+currentdate.getHours() + ":"
+                + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"
+                + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();
 
       var newFile = {id:index.toString(),retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false"};
-    
+
       uploads.insertOne(newFile, function(err, res) {
         if (err) throw err;
       });
@@ -120,18 +120,18 @@ module.exports = function (app, connection, log) {
     });
 
   });
-  
+
   app.get('/REMS/uploads', (req, res) => {
     var results = []
     var uploads = azureClient.db("pas_software_distribution").collection("uploads");
     uploads.find( {retailer_id:retailerId}).toArray(function(err, result){
       results = result;
       console.log(result)
-  
+
     res.send(results)
     });
   });
-  
+
   app.post('/sendCommand',bodyParser.json(), (req, res) => {
     res.send('received upload:\n\n');
     console.log(req.body)
@@ -226,5 +226,26 @@ module.exports = function (app, connection, log) {
                 });
             }
         })
+    });
+
+    app.get('/REMS/agents', (req, res) => {
+        var results = [];
+        const agents = azureClient.db("pas_software_distribution").collection("agents");
+        agents.find({ retailer_id: retailerId }, {
+            projection: { storeName: true, agentName: true, _id: false }
+        }).toArray(function (err, agentList) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!agentList) {
+                const msg = { "message": "Agents: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+
+                res.status(statusCode.OK).json(agentList);
+            }
+        });
     });
 }
