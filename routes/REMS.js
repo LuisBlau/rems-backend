@@ -129,10 +129,9 @@ module.exports = function (app, connection, log) {
   });
   
   app.post('/sendCommand',bodyParser.json(), (req, res) => {
-    res.send('received upload:\n\n');
     console.log("New command set");
     console.log(req.body)
-
+     return
     //query biggest index
     var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
     var results = [];
@@ -143,9 +142,9 @@ module.exports = function (app, connection, log) {
     
       var toInsert = {
         id:index.toString(),
-        name:"Missing name",
+        name:req.body.name,
         retailer_id:retailerId,
-        config_steps:req.body
+        config_steps:req.body.steps
       }
       
       deployConfig.insertOne(toInsert, function(err, res) {
