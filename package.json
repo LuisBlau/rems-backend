@@ -16,6 +16,7 @@
     "express": "^4.17.1",
     "express-formidable": "^1.2.0",
     "helmet": "^3.23.3",
+    "http-status-codes": "^2.2.0",
     "lodash": "^4.17.20",
     "lodash.clonedeep": "^4.5.0",
     "loglevel": "^1.7.0",

@@ -1,10 +1,14 @@
 // Std Library
-const {readFileSync} = require('fs')
+const { readFileSync } = require('fs')
 const path = require('path')
 const multiparty = require('multiparty');
 const fs = require('fs');
 const readline = require('readline');
-var bodyParser = require('body-parser')
+var bodyParser = require('body-parser');
+const _ = require('lodash');
+const { isRegExp } = require('lodash');
+const statusCode = require('http-status-codes').StatusCodes
+
 // setup dirs
 var uploadDir = process.env.REMS_HOME + "/uploads";
 
@@ -98,17 +102,17 @@ module.exports = function (app, connection, log) {
       results = result;
       var index = results[0].id;
       index++;
-    
-      var currentdate = new Date(); 
+
+      var currentdate = new Date();
       var datetime = currentdate.getFullYear() + "-"
-                + ((currentdate.getMonth()+1 < 10)?"0":"")+(currentdate.getMonth()+1) + "-"  
-                + ((currentdate.getDate() < 10)?"0":"")+currentdate.getDate() + " "  
-                + ((currentdate.getHours() < 10)?"0":"")+currentdate.getHours() + ":"  
-                + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"  
-                + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();  
+                + ((currentdate.getMonth()+1 < 10)?"0":"")+(currentdate.getMonth()+1) + "-"
+                + ((currentdate.getDate() < 10)?"0":"")+currentdate.getDate() + " "
+                + ((currentdate.getHours() < 10)?"0":"")+currentdate.getHours() + ":"
+                + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"
+                + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();
 
       var newFile = {id:index.toString(),retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false"};
-    
+
       uploads.insertOne(newFile, function(err, res) {
         if (err) throw err;
       });
@@ -116,18 +120,18 @@ module.exports = function (app, connection, log) {
     });
 
   });
-  
+
   app.get('/REMS/uploads', (req, res) => {
     var results = []
     var uploads = azureClient.db("pas_software_distribution").collection("uploads");
     uploads.find( {retailer_id:retailerId}).toArray(function(err, result){
       results = result;
       console.log(result)
-  
+
     res.send(results)
     });
   });
-  
+
   app.post('/sendCommand',bodyParser.json(), (req, res) => {
     console.log("New command set");
     console.log(req.body)
@@ -150,19 +154,117 @@ module.exports = function (app, connection, log) {
       deployConfig.insertOne(toInsert, function(err, res) {
         if (err) throw err;
       });
-
-    });
+  })
   })
 
-  app.get('/REMS/deploys', (req, res) => {
-    var results = []
-    var deploys = azureClient.db("pas_software_distribution").collection("deployments");
-    deploys.find( {retailer_id:retailerId, status:{$ne:"Succeeded"}}).toArray(function(err, result){
-      results = result;
-      console.log(result)
-  
-    res.send(results)
+    app.get('/REMS/deploys', (req, res) => {
+        var results = []
+        var deploys = azureClient.db("pas_software_distribution").collection("deployments");
+        deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
+            results = result;
+            console.log(result)
+            res.send(results)
+        });
     });
-  });
+
+    app.get('/REMS/deploy-configs', (req, res) => {
+        // console.log("GET deploy-configs request ")
+        var results = [];
+        const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
+        configs.find({ retailer_id: retailerId, name: { $ne: "Missing name" } }, {
+            projection: { steps: false, retailer_id: false, _id: false }
+        }).toArray(function (err, result) {
+            results = result;
+            res.send(results);
+        });
+    });
+
+    app.post('/deploy-config', bodyParser.json(), (req, res) => {
+        // console.log("POST deploy-config recived", req.body)
+
+        const dateTime = req.body.dateTime;
+        const name = req.body.name
+        const id = req.body.id
+
+        const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
+        configs.findOne({ name: name, id: id }, function (err, config) {
+
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!config) {
+                const msg = { "message": "Deploy-Config: name and id does not exist" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+                var record = {};
+                record.id = 0
+                record.retailer_id = config.retailer_id;
+                record.apply_time = dateTime;
+                record.storeName = "";
+                record.agentName = "";
+                record.status = "initial";
+                record.steps = config.steps;
+
+                for (const i in record.steps) {
+                    record.steps[i].status = 'initial'
+                    record.steps[i].output = []
+                }
+
+                const deployments = azureClient.db("pas_software_distribution").collection("deployments");
+                deployments.find({}).sort({ id: -1 }).limit(1).toArray(function (err, maxResults) {
+
+                    if (err) {
+                        const msg = { "error": err }
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        throw err
+                    }
+
+                    var maxId = maxResults[0].id;
+                    var newRecords = [];
+                    req.body.storeList.split(',').forEach(val => {
+                        const info = val.split(':');
+                        record.storeName = info[0].trim();
+                        record.agentName = info[1].trim();
+                        record.id = ++maxId;
+                        newRecords.push(_.cloneDeep(record))
+                    })
+
+                    deployments.insertMany(newRecords, function (err, insertResults) {
+                        if (err) {
+                            const msg = { "error": err }
+                            res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                            throw err
+                        }
+
+                        const msg = { "message": "Success" }
+                        res.status(statusCode.OK).json(msg);
+                    });
+
+                });
+            }
+        })
+    });
+
+    app.get('/REMS/agents', (req, res) => {
+        var results = [];
+        const agents = azureClient.db("pas_software_distribution").collection("agents");
+        agents.find({ retailer_id: retailerId }, {
+            projection: { storeName: true, agentName: true, _id: false }
+        }).toArray(function (err, agentList) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!agentList) {
+                const msg = { "message": "Agents: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+
+                res.status(statusCode.OK).json(agentList);
+            }
+        });
+    });
 }
- 
