@@ -94,7 +94,7 @@ module.exports = function (app, connection, log) {
         if (err) throw err;
       });
     });
-
+    
     //query biggest index
     var uploads = azureClient.db("pas_software_distribution").collection("uploads");
     var results = [];
@@ -102,7 +102,7 @@ module.exports = function (app, connection, log) {
       results = result;
       var index = results[0].id;
       index++;
-
+      console.log("New index "+index);
       var currentdate = new Date();
       var datetime = currentdate.getFullYear() + "-"
                 + ((currentdate.getMonth()+1 < 10)?"0":"")+(currentdate.getMonth()+1) + "-"
@@ -111,7 +111,7 @@ module.exports = function (app, connection, log) {
                 + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"
                 + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();
 
-      var newFile = {id:index.toString(),retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false"};
+      var newFile = {id:index,retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false"};
 
       uploads.insertOne(newFile, function(err, res) {
         if (err) throw err;
@@ -134,8 +134,8 @@ module.exports = function (app, connection, log) {
 
   app.post('/sendCommand',bodyParser.json(), (req, res) => {
     console.log("New command set");
-    console.log(req.body)
-     return
+    console.log(JSON.stringify(req.body))
+    
     //query biggest index
     var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
     var results = [];
@@ -148,12 +148,24 @@ module.exports = function (app, connection, log) {
         id:index.toString(),
         name:req.body.name,
         retailer_id:retailerId,
-        config_steps:req.body.steps
+        steps:[]
+      //  config_steps:req.body.steps
       }
       
+      for( var i=0; i<req.body.steps.length; i++) {
+        console.log("Step "+i+" type="+req.body.steps[i].type)
+        toInsert.steps.push( {
+          type:req.body.steps[i].type,
+          ...req.body.steps[i].arguments
+        })
+      }
+
+      console.log(JSON.stringify(toInsert));
+
       deployConfig.insertOne(toInsert, function(err, res) {
         if (err) throw err;
       });
+      console.log("Inserted");
   })
   })
 
@@ -204,11 +216,11 @@ module.exports = function (app, connection, log) {
                 record.apply_time = dateTime;
                 record.storeName = "";
                 record.agentName = "";
-                record.status = "initial";
+                record.status = "Initial";
                 record.steps = config.steps;
 
                 for (const i in record.steps) {
-                    record.steps[i].status = 'initial'
+                    record.steps[i].status = 'Initial'
                     record.steps[i].output = []
                 }
 
