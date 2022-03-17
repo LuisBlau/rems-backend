@@ -172,7 +172,8 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/deploys', (req, res) => {
         var results = []
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
-        deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
+        //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
+        deploys.find({ retailer_id: retailerId }).toArray(function (err, result) {
             results = result;
             console.log(result)
             res.send(results)
