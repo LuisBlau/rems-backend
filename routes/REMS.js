@@ -145,7 +145,7 @@ module.exports = function (app, connection, log) {
       index++;
     
       var toInsert = {
-        id:index.toString(),
+        id:index,
         name:req.body.name,
         retailer_id:retailerId,
         steps:[]
@@ -171,11 +171,18 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/deploys', (req, res) => {
         var results = []
-        var deploys = azureClient.db("pas_software_distribution").collection("deployments");
+  		let filters = {}
+	  	if(req.query.store) filters.storeName = {$regex:".*" + req.query.store + ".*"}
+		  if(req.query.package && parseInt(req.query.package)>0) filters.config_id = parseInt(req.query.package)
+
+      console.log("Filter")
+      console.log(JSON.stringify({ retailer_id: retailerId,...filters}))
+
+      var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
-        deploys.find({ retailer_id: retailerId }).toArray(function (err, result) {
+        deploys.find({ retailer_id: retailerId,...filters}).toArray(function (err, result) {
             results = result;
-            console.log(result)
+            //console.log(result)
             res.send(results)
         });
     });
@@ -193,7 +200,7 @@ module.exports = function (app, connection, log) {
     });
 
     app.post('/deploy-config', bodyParser.json(), (req, res) => {
-        // console.log("POST deploy-config recived", req.body)
+        console.log("POST deploy-config recived", req.body)
 
         const dateTime = req.body.dateTime;
         const name = req.body.name
@@ -214,11 +221,13 @@ module.exports = function (app, connection, log) {
                 var record = {};
                 record.id = 0
                 record.retailer_id = config.retailer_id;
+                record.config_id = config.id
                 record.apply_time = dateTime;
                 record.storeName = "";
                 record.agentName = "";
                 record.status = "Initial";
                 record.steps = config.steps;
+				record.package = config["name"]
 
                 for (const i in record.steps) {
                     record.steps[i].status = 'Initial'
