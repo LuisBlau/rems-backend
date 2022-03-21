@@ -85,16 +85,8 @@ module.exports = function (app, connection, log) {
       if (!fs.existsSync(uploadDir)){
         fs.mkdirSync(uploadDir);
       }
-	  let newFileName = uploadDir + "/" + files["file"][0].originalFilename
-    filename = files["file"][0].originalFilename;
-	  if(fs.existsSync(newFileName)) {
-	    newFileName = uploadDir + "/" + files["file"][0].originalFilename + Math.floor(+new Date() / 1000).toString()
-	  }
-	  fs.copyFile(files["file"][0].path, newFileName, (err) => {
-        if (err) throw err;
-      });
-    
-      //query biggest index
+	  filename = files["file"][0].originalFilename;
+	    //query biggest index
       var uploads = azureClient.db("pas_software_distribution").collection("uploads");
       var results = [];
       uploads.find({retailer_id:retailerId}).sort({id:-1}).limit(1).toArray(function(err, result){
@@ -110,8 +102,13 @@ module.exports = function (app, connection, log) {
                   + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"
                   + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();
 
+        
+        let newFileName = uploadDir + "/" + index.toString() + ".upload"
+        fs.copyFile(files["file"][0].path, newFileName, (err) => {
+            if (err) throw err;
+        });
+        
         var newFile = {id:index,retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false",description:fields["description"]};
-
         uploads.insertOne(newFile, function(err, res) {
           if (err) throw err;
         });
