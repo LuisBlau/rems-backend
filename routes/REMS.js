@@ -171,9 +171,12 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/deploys', (req, res) => {
         var results = []
+		let filters = {}
+		if(req.query.store) filters.storeName = {$regex:".*" + req.query.store + ".*"}
+		if(req.query.package) filters.package = req.query.package
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
-        deploys.find({ retailer_id: retailerId }).toArray(function (err, result) {
+        deploys.find({ retailer_id: retailerId,...filters}).toArray(function (err, result) {
             results = result;
             console.log(result)
             res.send(results)
@@ -193,7 +196,7 @@ module.exports = function (app, connection, log) {
     });
 
     app.post('/deploy-config', bodyParser.json(), (req, res) => {
-        // console.log("POST deploy-config recived", req.body)
+        console.log("POST deploy-config recived", req.body)
 
         const dateTime = req.body.dateTime;
         const name = req.body.name
@@ -219,6 +222,7 @@ module.exports = function (app, connection, log) {
                 record.agentName = "";
                 record.status = "Initial";
                 record.steps = config.steps;
+				record.package = config["name"]
 
                 for (const i in record.steps) {
                     record.steps[i].status = 'Initial'
