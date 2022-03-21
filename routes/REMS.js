@@ -79,9 +79,8 @@ module.exports = function (app, connection, log) {
     console.log("request recieved")
     var form = new multiparty.Form();
     var filename;
-	res.writeHead(200, { 'content-type': 'text/plain' });
+	  res.writeHead(200, { 'content-type': 'text/plain' });
     res.write('received upload:\n\n');
-	res.send()
     form.parse(req, function(err, fields, files) {
       if (!fs.existsSync(uploadDir)){
         fs.mkdirSync(uploadDir);
@@ -95,30 +94,31 @@ module.exports = function (app, connection, log) {
         if (err) throw err;
       });
     
-    //query biggest index
-    var uploads = azureClient.db("pas_software_distribution").collection("uploads");
-    var results = [];
-    uploads.find({retailer_id:retailerId}).sort({id:-1}).limit(1).toArray(function(err, result){
-      results = result;
-      var index = results[0].id;
-      index++;
-      console.log("New index "+index);
-      var currentdate = new Date();
-      var datetime = currentdate.getFullYear() + "-"
-                + ((currentdate.getMonth()+1 < 10)?"0":"")+(currentdate.getMonth()+1) + "-"
-                + ((currentdate.getDate() < 10)?"0":"")+currentdate.getDate() + " "
-                + ((currentdate.getHours() < 10)?"0":"")+currentdate.getHours() + ":"
-                + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"
-                + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();
+      //query biggest index
+      var uploads = azureClient.db("pas_software_distribution").collection("uploads");
+      var results = [];
+      uploads.find({retailer_id:retailerId}).sort({id:-1}).limit(1).toArray(function(err, result){
+        results = result;
+        var index = results[0].id;
+        index++;
+        console.log("New index "+index);
+        var currentdate = new Date();
+        var datetime = currentdate.getFullYear() + "-"
+                  + ((currentdate.getMonth()+1 < 10)?"0":"")+(currentdate.getMonth()+1) + "-"
+                  + ((currentdate.getDate() < 10)?"0":"")+currentdate.getDate() + " "
+                  + ((currentdate.getHours() < 10)?"0":"")+currentdate.getHours() + ":"
+                  + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"
+                  + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();
 
-      var newFile = {id:index,retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false",description:fields["description"]};
+        var newFile = {id:index,retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false",description:fields["description"]};
 
-      uploads.insertOne(newFile, function(err, res) {
-        if (err) throw err;
+        uploads.insertOne(newFile, function(err, res) {
+          if (err) throw err;
+        });
+
       });
-
+      res.send()
     });
-  });
 
   });
 
