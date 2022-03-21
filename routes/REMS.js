@@ -79,9 +79,10 @@ module.exports = function (app, connection, log) {
     console.log("request recieved")
     var form = new multiparty.Form();
     var filename;
+	res.writeHead(200, { 'content-type': 'text/plain' });
+    res.write('received upload:\n\n');
+	res.send()
     form.parse(req, function(err, fields, files) {
-	    res.writeHead(200, { 'content-type': 'text/plain' });
-      res.write('received upload:\n\n');
       if (!fs.existsSync(uploadDir)){
         fs.mkdirSync(uploadDir);
       }
@@ -93,7 +94,6 @@ module.exports = function (app, connection, log) {
 	  fs.copyFile(files["file"][0].path, newFileName, (err) => {
         if (err) throw err;
       });
-    });
     
     //query biggest index
     var uploads = azureClient.db("pas_software_distribution").collection("uploads");
@@ -111,13 +111,14 @@ module.exports = function (app, connection, log) {
                 + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"
                 + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();
 
-      var newFile = {id:index,retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false"};
+      var newFile = {id:index,retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false",description:fields["description"]};
 
       uploads.insertOne(newFile, function(err, res) {
         if (err) throw err;
       });
 
     });
+  });
 
   });
 
