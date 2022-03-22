@@ -233,7 +233,7 @@ module.exports = function (app, connection, log) {
                 record.agentName = "";
                 record.status = "Initial";
                 record.steps = config.steps;
-				record.package = config["name"]
+				        record.package = config["name"]
 
                 for (const i in record.steps) {
                     record.steps[i].status = 'Initial'
@@ -249,7 +249,12 @@ module.exports = function (app, connection, log) {
                         throw err
                     }
 
-                    var maxId = maxResults[0].id;
+                    var maxId = 0;
+                    if ( maxResults.length > 0) {
+                      index = maxResults[0].id;
+                    }
+                    index++;
+                    
                     var newRecords = [];
                     req.body.storeList.split(',').forEach(val => {
                         const info = val.split(':');
