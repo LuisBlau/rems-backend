@@ -112,7 +112,7 @@ module.exports = function (app, connection, log) {
             if (err) throw err;
         });
         
-        var newFile = {id:index,retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false",description:fields["description"]};
+        var newFile = {id:index,retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false",description:fields["description"][0]};
         uploads.insertOne(newFile, function(err, res) {
           if (err) throw err;
         });
