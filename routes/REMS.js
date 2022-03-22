@@ -91,7 +91,11 @@ module.exports = function (app, connection, log) {
       var results = [];
       uploads.find({retailer_id:retailerId}).sort({id:-1}).limit(1).toArray(function(err, result){
         results = result;
-        var index = results[0].id;
+        var index = 0;
+        
+        if ( results.length > 0) {
+          index = results[0].id;
+        }
         index++;
         console.log("New index "+index);
         var currentdate = new Date();
@@ -139,7 +143,11 @@ module.exports = function (app, connection, log) {
     var results = [];
     deployConfig.find({retailer_id:retailerId}).sort({id:-1}).limit(1).toArray(function(err, result){
       results = result;
-      var index = results[0].id;
+      var index = 0;
+        
+      if ( results.length > 0) {
+        index = results[0].id;
+      }
       index++;
     
       var toInsert = {
