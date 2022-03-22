@@ -251,9 +251,9 @@ module.exports = function (app, connection, log) {
 
                     var maxId = 0;
                     if ( maxResults.length > 0) {
-                      index = maxResults[0].id;
+                      maxId = maxResults[0].id;
                     }
-                    index++;
+                    maxId++;
                     
                     var newRecords = [];
                     req.body.storeList.split(',').forEach(val => {
