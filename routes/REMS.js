@@ -23,170 +23,180 @@ readRetailerId();
 
 
 function readRetailerId() {
-  const fileStream = fs.createReadStream(process.env.REMS_HOME +"/etc/com.toshibacommerce.service.cloudforwarder.cfg");
+    const fileStream = fs.createReadStream(process.env.REMS_HOME + "/etc/com.toshibacommerce.service.cloudforwarder.cfg");
 
-  const lineReader = readline.createInterface({
-    input: fileStream,
-    crlfDelay: Infinity
-  });
+    const lineReader = readline.createInterface({
+        input: fileStream,
+        crlfDelay: Infinity
+    });
 
-  lineReader.on('line', function (line) {
-    if ( line.includes("retailer-torico-id") )
-    {
-        var values = line.split("=");
-        retailerId = values[1];
-    }
-  });
+    lineReader.on('line', function (line) {
+        if (line.includes("retailer-torico-id")) {
+            var values = line.split("=");
+            retailerId = values[1];
+        }
+    });
 
 }
 
 function sendRelevantJSON(res, jsonPath) {
-  res.send(JSON.parse(
-    readFileSync(
-      path.join(process.cwd(), 'Data', jsonPath)
-    )
-  ))
+    res.send(JSON.parse(
+        readFileSync(
+            path.join(process.cwd(), 'Data', jsonPath)
+        )
+    ))
 }
 
 module.exports = function (app, connection, log) {
 
 
-  app.get('/REMS/store-connection', (req, res) => {
-    log.info(`GET ${req.originalUrl}`)
+    app.get('/REMS/store-connection', (req, res) => {
+        log.info(`GET ${req.originalUrl}`)
 
-    sendRelevantJSON(res, 'store_connection.json');
+        sendRelevantJSON(res, 'store_connection.json');
 
-  })
+    })
 
-  app.get('/REMS/vpd', (req, res) => {
-    log.info(`GET ${req.originalUrl}`)
+    app.get('/REMS/vpd', (req, res) => {
+        log.info(`GET ${req.originalUrl}`)
 
-    sendRelevantJSON(res, 'out_vpd_filtered.json');
-  })
+        sendRelevantJSON(res, 'out_vpd_filtered.json');
+    })
 
-  app.get('/REMS/release', (req, res) => {
-    log.info(`GET ${req.originalUrl}`)
+    app.get('/REMS/release', (req, res) => {
+        log.info(`GET ${req.originalUrl}`)
 
-    sendRelevantJSON(res, 'out_release.json');
-  })
+        sendRelevantJSON(res, 'out_release.json');
+    })
 
-  app.get('/REMS/low-mem', (req, res) => {
-    log.info(`GET ${req.originalUrl}`)
+    app.get('/REMS/low-mem', (req, res) => {
+        log.info(`GET ${req.originalUrl}`)
 
-    sendRelevantJSON(res, 'low_mem.json');
-  })
-  app.post("/REMS/uploadfile", (req,res) => {
-    console.log("request recieved")
-    var form = new multiparty.Form();
-    var filename;
-	  res.writeHead(200, { 'content-type': 'text/plain' });
-    res.write('received upload:\n\n');
-    form.parse(req, function(err, fields, files) {
-      if (!fs.existsSync(uploadDir)){
-        fs.mkdirSync(uploadDir);
-      }
-	  filename = files["file"][0].originalFilename;
-	    //query biggest index
-      var uploads = azureClient.db("pas_software_distribution").collection("uploads");
-      var results = [];
-      uploads.find({retailer_id:retailerId}).sort({id:-1}).limit(1).toArray(function(err, result){
-        results = result;
-        var index = 0;
-        
-        if ( results.length > 0) {
-          index = results[0].id;
-        }
-        index++;
-        console.log("New index "+index);
-        var currentdate = new Date();
-        var datetime = currentdate.getFullYear() + "-"
-                  + ((currentdate.getMonth()+1 < 10)?"0":"")+(currentdate.getMonth()+1) + "-"
-                  + ((currentdate.getDate() < 10)?"0":"")+currentdate.getDate() + " "
-                  + ((currentdate.getHours() < 10)?"0":"")+currentdate.getHours() + ":"
-                  + ((currentdate.getMinutes() < 10)?"0":"")+currentdate.getMinutes() + ":"
-                  + ((currentdate.getSeconds() < 10)?"0":"")+currentdate.getSeconds();
+        sendRelevantJSON(res, 'low_mem.json');
+    })
+    app.post("/REMS/uploadfile", (req, res) => {
+        console.log("request recieved")
+        var form = new multiparty.Form();
+        var filename;
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        res.write('received upload:\n\n');
+        form.parse(req, function (err, fields, files) {
+            if (!fs.existsSync(uploadDir)) {
+                fs.mkdirSync(uploadDir);
+            }
+            filename = files["file"][0].originalFilename;
+            //query biggest index
+            var uploads = azureClient.db("pas_software_distribution").collection("uploads");
+            var results = [];
+            uploads.find({ retailer_id: retailerId }).sort({ id: -1 }).limit(1).toArray(function (err, result) {
+                results = result;
+                var index = 0;
 
-        
-        let newFileName = uploadDir + "/" + index.toString() + ".upload"
-        fs.copyFile(files["file"][0].path, newFileName, (err) => {
-            if (err) throw err;
+                if (results.length > 0) {
+                    index = results[0].id;
+                }
+                index++;
+                console.log("New index " + index);
+                var currentdate = new Date();
+                var datetime = currentdate.getFullYear() + "-"
+                    + ((currentdate.getMonth() + 1 < 10) ? "0" : "") + (currentdate.getMonth() + 1) + "-"
+                    + ((currentdate.getDate() < 10) ? "0" : "") + currentdate.getDate() + " "
+                    + ((currentdate.getHours() < 10) ? "0" : "") + currentdate.getHours() + ":"
+                    + ((currentdate.getMinutes() < 10) ? "0" : "") + currentdate.getMinutes() + ":"
+                    + ((currentdate.getSeconds() < 10) ? "0" : "") + currentdate.getSeconds();
+
+
+                let newFileName = uploadDir + "/" + index.toString() + ".upload"
+                fs.copyFile(files["file"][0].path, newFileName, (err) => {
+                    if (err) throw err;
+                });
+
+                var newFile = { id: index, retailer_id: retailerId, filename: filename, inserted: currentdate.getTime(), timestamp: datetime, archived: "false", description: fields["description"][0] };
+                uploads.insertOne(newFile, function (err, res) {
+                    if (err) throw err;
+                });
+
+            });
+            res.send()
         });
-        
-        var newFile = {id:index,retailer_id: retailerId, filename:filename, inserted:currentdate.getTime(),timestamp:datetime,archived:"false",description:fields["description"][0]};
-        uploads.insertOne(newFile, function(err, res) {
-          if (err) throw err;
-        });
 
-      });
-      res.send()
     });
 
-  });
+    app.get('/REMS/uploads', (req, res) => {
+        var results = []
+        var uploads = azureClient.db("pas_software_distribution").collection("uploads");
+        uploads.find({ retailer_id: retailerId }).toArray(function (err, result) {
+            results = result;
+            console.log(result)
 
-  app.get('/REMS/uploads', (req, res) => {
-    var results = []
-    var uploads = azureClient.db("pas_software_distribution").collection("uploads");
-    uploads.find( {retailer_id:retailerId}).toArray(function(err, result){
-      results = result;
-      console.log(result)
-
-    res.send(results)
+            res.send(results)
+        });
     });
-  });
 
-  app.post('/sendCommand',bodyParser.json(), (req, res) => {
-    console.log("New command set");
-    console.log(JSON.stringify(req.body))
-    
-    //query biggest index
-    var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
-    var results = [];
-    deployConfig.find({retailer_id:retailerId}).sort({id:-1}).limit(1).toArray(function(err, result){
-      results = result;
-      var index = 0;
-        
-      if ( results.length > 0) {
-        index = results[0].id;
-      }
-      index++;
-    
-      var toInsert = {
-        id:index,
-        name:req.body.name,
-        retailer_id:retailerId,
-        steps:[]
-      //  config_steps:req.body.steps
-      }
-      
-      for( var i=0; i<req.body.steps.length; i++) {
-        console.log("Step "+i+" type="+req.body.steps[i].type)
-        toInsert.steps.push( {
-          type:req.body.steps[i].type,
-          ...req.body.steps[i].arguments
+    app.post('/sendCommand', bodyParser.json(), (req, res) => {
+        console.log("New command set");
+        console.log(JSON.stringify(req.body))
+
+        //query biggest index
+        var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
+        var results = [];
+        deployConfig.find({ retailer_id: retailerId }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
+
+            if (err_find) {
+                const msg = { "error": err_find }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err_find
+            }
+
+            var index = 0;
+            if (result.length > 0) {
+                index = result[0].id;
+            }
+            index++;
+
+            var toInsert = {
+                id: index,
+                name: req.body.name,
+                retailer_id: retailerId,
+                steps: []
+                //  config_steps:req.body.steps
+            }
+
+            for (var i = 0; i < req.body.steps.length; i++) {
+                console.log("Step " + i + " type=" + req.body.steps[i].type)
+                toInsert.steps.push({
+                    type: req.body.steps[i].type,
+                    ...req.body.steps[i].arguments
+                })
+            }
+            console.log(JSON.stringify(toInsert));
+
+            deployConfig.insertOne(toInsert, function (err, res) {
+                if (err) {
+                    const msg = { "error": err }
+                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                    throw err;
+                }
+            });
+
+            console.log("Inserted");
+            const msg = { "message": "Success" }
+            res.status(statusCode.OK).json(msg);
         })
-      }
-
-      console.log(JSON.stringify(toInsert));
-
-      deployConfig.insertOne(toInsert, function(err, res) {
-        if (err) throw err;
-      });
-      console.log("Inserted");
-  })
-  })
+    })
 
     app.get('/REMS/deploys', (req, res) => {
         var results = []
-  		let filters = {}
-	  	if(req.query.store) filters.storeName = {$regex:".*" + req.query.store + ".*"}
-		  if(req.query.package && parseInt(req.query.package)>0) filters.config_id = parseInt(req.query.package)
+        let filters = {}
+        if (req.query.store) filters.storeName = { $regex: ".*" + req.query.store + ".*" }
+        if (req.query.package && parseInt(req.query.package) > 0) filters.config_id = parseInt(req.query.package)
 
-      console.log("Filter")
-      console.log(JSON.stringify({ retailer_id: retailerId,...filters}))
+        console.log("Filter")
+        console.log(JSON.stringify({ retailer_id: retailerId, ...filters }))
 
-      var deploys = azureClient.db("pas_software_distribution").collection("deployments");
+        var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
-        deploys.find({ retailer_id: retailerId,...filters}).toArray(function (err, result) {
+        deploys.find({ retailer_id: retailerId, ...filters }).toArray(function (err, result) {
             results = result;
             //console.log(result)
             res.send(results)
@@ -233,7 +243,7 @@ module.exports = function (app, connection, log) {
                 record.agentName = "";
                 record.status = "Initial";
                 record.steps = config.steps;
-				        record.package = config["name"]
+                record.package = config["name"]
 
                 for (const i in record.steps) {
                     record.steps[i].status = 'Initial'
@@ -250,11 +260,11 @@ module.exports = function (app, connection, log) {
                     }
 
                     var maxId = 0;
-                    if ( maxResults.length > 0) {
-                      maxId = maxResults[0].id;
+                    if (maxResults.length > 0) {
+                        maxId = maxResults[0].id;
                     }
                     maxId++;
-                    
+
                     var newRecords = [];
                     req.body.storeList.split(',').forEach(val => {
                         const info = val.split(':');
