@@ -188,15 +188,17 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/deploys', (req, res) => {
         var results = []
         let filters = {}
+        var maxRecords = 0;
         if (req.query.store) filters.storeName = { $regex: ".*" + req.query.store + ".*" }
         if (req.query.package && parseInt(req.query.package) > 0) filters.config_id = parseInt(req.query.package)
+        if (req.query.records) maxRecords = parseInt(req.query.records);
 
         console.log("Filter")
         console.log(JSON.stringify({ retailer_id: retailerId, ...filters }))
 
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
-        deploys.find({ retailer_id: retailerId, ...filters }).toArray(function (err, result) {
+        deploys.find({ retailer_id: retailerId, ...filters }).limit(maxRecords).toArray(function (err, result) {
             results = result;
             //console.log(result)
             res.send(results)
