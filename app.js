@@ -1,10 +1,12 @@
 // Security
 const cors = require('cors')
 const helmet = require('helmet')
-
+const jwtAuth = require("./middleware/jwtauth")
+console.log(cookieParser)
 // Logging
 const log = require('loglevel')
 const prefix = require('loglevel-format')
+global.secret = "replace with your secret";
 log.setDefaultLevel("trace")
 prefix.apply(log, {
   template: '[%t][%l] - %m',
@@ -28,7 +30,9 @@ const app = express()
 const port = 3001
 app.use(helmet())
 app.use(cors())
-
+var cookieParser = require('cookie-parser')
+app.use(cookieParser())
+app.use(jwtAuth())
 const mysql = require('mysql2')
 let {DB, HOST, PASSWORD, USER} = require('./db.config')
 
