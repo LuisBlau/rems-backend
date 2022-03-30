@@ -12,9 +12,11 @@ const statusCode = require('http-status-codes').StatusCodes
 // setup dirs
 var uploadDir = process.env.REMS_HOME + "/uploads";
 
+/* cSpell:disable */
 //setup azure connections
 var azureClient = new require("mongodb").MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
+/* cSpell:enable */
 
 //find retailer id
 var retailerId;
@@ -43,6 +45,51 @@ function sendRelevantJSON(res, jsonPath) {
             path.join(process.cwd(), 'Data', jsonPath)
         )
     ))
+}
+
+/*
+ async map to look up any agents user did not supply
+Input : stores is an array of the stores missing an agent where each has
+{ index, - index into newRecord array to set the agent when it is found
+  name - name of the store who's agent we need
+}
+
+Returns: An array with the agent included if found
+{
+    index, - index into newRecords to speed up assigning the agentName
+    storeName, - the name of the store who's agent was requested
+    agentName - agent name returned from DB ( null if none found)
+}
+or null if no work was done. i.e. input is an empty array. That keeps the caller
+from having to follow two paths.
+*/
+async function lookupAgents(stores) {
+
+    if (stores.length > 0) {
+        const promises = stores.map(async store => {
+            const agents = azureClient.db("pas_software_distribution").collection("agents");
+            try {
+                const response = await agents.findOne({
+                    retailer_id: retailerId,
+                    storeName: store.name,
+                    is_master: true
+                })
+                return {
+                    index: store.index,
+                    storeName: store.name,
+                    agentName: (!response) ? null : response.agentName
+                }
+            }
+            catch (error) {
+                console.log("findone returned error : ", error);
+                throw (error);
+            }
+        })
+        return (await Promise.all(promises))
+    }
+    else {
+        return null;
+    }
 }
 
 module.exports = function (app, connection, log) {
@@ -74,7 +121,7 @@ module.exports = function (app, connection, log) {
     })
 
     app.post("/REMS/uploadfile", (req, res) => {
-        console.log("request recieved")
+        console.log("request received")
         var form = new multiparty.Form();
         var filename;
         res.writeHead(200, { 'content-type': 'text/plain' });
@@ -216,23 +263,25 @@ module.exports = function (app, connection, log) {
         });
     });
 
-    app.post('/deploy-config', bodyParser.json(), (req, res) => {
-        console.log("POST deploy-config received : ", req.body)
+    app.post('/deploy-schedule', bodyParser.json(), (req, res) => {
+        console.log("POST deploy-schedule received : ", req.body)
 
-        const dateTime = req.body.dateTime;
+        const dateTime = req.body["dateTime"];
         const name = req.body.name
         const id = req.body.id
+        let storeList = req.body.storeList
 
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        configs.findOne({ name: name, id: id }, function (err, config) {
+        configs.findOne({ retailer_id: retailerId, name: name, id: id }, function (err, config) {
 
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
+                return;
             } else if (!config) {
                 const msg = { "message": "Deploy-Config: name and id does not exist" }
                 res.status(statusCode.NO_CONTENT).json(msg);
+                return;
             }
             else {
                 var record = {};
@@ -251,50 +300,118 @@ module.exports = function (app, connection, log) {
                     record.steps[i].output = []
                 }
 
+                var newRecords = [];
+                var missingAgent = [];
                 const deployments = azureClient.db("pas_software_distribution").collection("deployments");
                 deployments.find({}).sort({ id: -1 }).limit(1).toArray(function (err, maxResults) {
 
                     if (err) {
                         const msg = { "error": err }
                         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                        throw err
+                        return;
                     }
 
                     var maxId = 0;
                     if (maxResults.length > 0) {
                         maxId = maxResults[0].id;
                     }
-                    maxId++;
 
-                    var newRecords = [];
-                    req.body.storeList.split(',').forEach(val => {
-                        const info = val.split(':');
-                        record.storeName = info[0].trim();
-                        record.agentName = info[1].trim();
-                        record.id = ++maxId;
-                        newRecords.push(_.cloneDeep(record))
+                    /* I think this maxID++ was causing us to increment the id by 2. We add one here and one when I assign the id
+                    to the record in the next section below.  I am going to comment out for now, but it can be removed
+                    later. I just left it here so I could add this explanation. :) */
+                    //maxId++;
+
+                    // Replace line endings with commas and proceed. This allows the user to use a list from excell ect.
+                    storeList = storeList.replace(/(?:\r\n|\r|\n)/g, ',');
+                    // Incase there is a , at the end of a line.
+                    storeList = storeList.replace(/(?:,)+/g, ',');
+
+                    var indx = 0;
+                    storeList.split(',').forEach(val => {
+
+                        /* The line break substitution above may add an extra comma
+                            to the end of the data. This check makes sure we
+                            don't process it */
+                        if (val.length > 0) {
+                            const info = val.split(':');
+                            if (info.length == 2) {
+                                record.storeName = info[0].trim();
+                                record.agentName = info[1].trim();
+                                record.id = ++maxId;
+                                newRecords.push(_.cloneDeep(record))
+                            }
+                            else if (info.length == 1) {
+                                var name = info[0].trim();
+                                missingAgent.push({ index: indx, name: name });
+                                record.storeName = name;
+                                record.id = ++maxId;
+                                newRecords.push(_.cloneDeep(record))
+                            }
+                            else {
+                                const msg = { "message": "Error parsing store list!" }
+                                res.status(statusCode.NOT_MODIFIED).json(msg);
+                                return;
+                            }
+                            //clear for next loop incase we are missing anything
+                            record.storeName = ""
+                            record.agentName = ""
+                            indx++;
+                        }
                     })
 
-                    deployments.insertMany(newRecords, function (err, insertResults) {
-                        if (err) {
-                            const msg = { "error": err }
-                            res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                            throw err
+                    lookupAgents(missingAgent).then(agents => {
+                        var noAgent = "";
+                        if (agents) {
+                            agents.map(agent => {
+                                if (agent.agentName) {
+                                    newRecords[agent.index].agentName = agent.agentName;
+                                }
+                                else {
+                                    noAgent = noAgent + agent.storeName + " "
+                                }
+                            })
                         }
 
-                        const msg = { "message": "Success" }
-                        res.status(statusCode.OK).json(msg);
+                        if (noAgent.length > 0) {
+                            /* I wanted to send an error here, but we cannot add a message to an error response
+                            So we have to check if the message == Success on the client side*/
+                            const msg = "Agent(s) not found for store(s) [ " + noAgent + "]"
+                            res.status(statusCode.OK).json(msg)
+                            return;
+                        }
+                        else {
+                            deployments.insertMany(newRecords, function (err, insertResults) {
+                                if (err) {
+                                    const msg = { "error": err }
+                                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                                    return
+                                }
+                            });
+                            const msg = { "message": "Success" }
+                            res.status(statusCode.OK).json(msg);
+                            return;
+                        }
+                    }).catch(error => {
+                        const msg = { "error": error }
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        return;
                     });
-
-                });
-            }
-        })
+                }); // deployment read from DB for max index
+            }// if config lookup was good.
+        }) // config lookup from database
     });
 
     app.get('/REMS/agents', (req, res) => {
+        console.log("Get /REMS/agents received : ", req.query)
         var results = [];
+        let filters = {}
+
+        if (req.query.onlyMasters == 'true') {
+            console.log("onlyMasters : ", req.query.onlyMasters)
+            filters.is_master = true
+        }
         const agents = azureClient.db("pas_software_distribution").collection("agents");
-        agents.find({ retailer_id: retailerId }, {
+        agents.find({ retailer_id: retailerId, ...filters }, {
             projection: { storeName: true, agentName: true, _id: false }
         }).toArray(function (err, agentList) {
             if (err) {
@@ -306,13 +423,13 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-
+                console.log("sending agentList : ", agentList)
                 res.status(statusCode.OK).json(agentList);
             }
         });
     });
 
-    app.post('/deploy-cancel', bodyParser.json(), (request, reponse) => {
+    app.post('/deploy-cancel', bodyParser.json(), (request, response) => {
         console.log("POST deploy-update received : ", request.body)
         const storeName = request.body.storeName;
         const id = request.body.id;
@@ -326,7 +443,7 @@ module.exports = function (app, connection, log) {
             if (error) {
                 console.log("Update error : ", error)
                 const msg = { "message": "Error Canceling Deployment" }
-                reponse.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
                 throw (error)
                 return;
             }
@@ -342,26 +459,27 @@ module.exports = function (app, connection, log) {
                 if (upResult.result.n <= 0) {
                     console.log("Cancel Deployment Find FAIL : ", responseInfo)
                     const msg = { "message": "Unable to find that Deployment" }
-                    reponse.status(statusCode.NOT_FOUND).json(msg);
+                    response.status(statusCode.NOT_FOUND).json(msg);
                     return;
                 }
                 else if (upResult.result.nModified <= 0) {
                     console.log("Cancel Deployment Modify FAIL : ", responseInfo)
                     const msg = { "message": "Unable to cancel that Deployment" }
-                    reponse.status(statusCode.NOT_MODIFIED).json(msg);
+                    response.status(statusCode.NOT_MODIFIED).json(msg);
                     return;
                 }
                 else {
                     console.log("Cancel Deployment SUCCESS : ", responseInfo)
                     const msg = { "message": "SUCCESS" }
-                    reponse.status(statusCode.OK).json(msg);
+                    response.status(statusCode.OK).json(msg);
                     return;
                 }
             }
             console.log("How did I get here? : store : " + storeName + " id : " + id);
-            const msg = { "message": "Unkown Error" }
-            reponse.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+            const msg = { "message": "Unknown Error" }
+            response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
             return;
         });
     });
 }
+
