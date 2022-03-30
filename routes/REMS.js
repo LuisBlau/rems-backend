@@ -20,8 +20,6 @@ azureClient.connect();
 var retailerId;
 readRetailerId();
 
-
-
 function readRetailerId() {
     const fileStream = fs.createReadStream(process.env.REMS_HOME + "/etc/com.toshibacommerce.service.cloudforwarder.cfg");
 
@@ -74,6 +72,7 @@ module.exports = function (app, connection, log) {
 
         sendRelevantJSON(res, 'low_mem.json');
     })
+
     app.post("/REMS/uploadfile", (req, res) => {
         console.log("request recieved")
         var form = new multiparty.Form();
@@ -193,8 +192,8 @@ module.exports = function (app, connection, log) {
         if (req.query.package && parseInt(req.query.package) > 0) filters.config_id = parseInt(req.query.package)
         if (req.query.records) maxRecords = parseInt(req.query.records);
 
-        console.log("Filter")
-        console.log(JSON.stringify({ retailer_id: retailerId, ...filters }))
+        // console.log("Filter")
+        // console.log(JSON.stringify({ retailer_id: retailerId, ...filters }))
 
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
@@ -218,7 +217,7 @@ module.exports = function (app, connection, log) {
     });
 
     app.post('/deploy-config', bodyParser.json(), (req, res) => {
-        console.log("POST deploy-config recived", req.body)
+        console.log("POST deploy-config received : ", req.body)
 
         const dateTime = req.body.dateTime;
         const name = req.body.name
@@ -310,6 +309,59 @@ module.exports = function (app, connection, log) {
 
                 res.status(statusCode.OK).json(agentList);
             }
+        });
+    });
+
+    app.post('/deploy-cancel', bodyParser.json(), (request, reponse) => {
+        console.log("POST deploy-update received : ", request.body)
+        const storeName = request.body.storeName;
+        const id = request.body.id;
+        const newStatus = "Cancel";
+
+        const deployQuery = { retailer_id: retailerId, storeName: storeName, id: parseInt(id), status: { $in: ["initial", "Initial", "Pending", "pending"] } };
+        const deployUpdate = { $set: { status: newStatus } }
+
+        const deploys = azureClient.db("pas_software_distribution").collection("deployments")
+        deploys.updateOne(deployQuery, deployUpdate, function (error, upResult) {
+            if (error) {
+                console.log("Update error : ", error)
+                const msg = { "message": "Error Canceling Deployment" }
+                reponse.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                throw (error)
+                return;
+            }
+
+            if (upResult) {
+                const responseInfo =
+                    " [ store: " + storeName +
+                    " id: " + id +
+                    " n: " + upResult.result.n +
+                    " nModified: " + upResult.result.nModified +
+                    " ]"
+
+                if (upResult.result.n <= 0) {
+                    console.log("Cancel Deployment Find FAIL : ", responseInfo)
+                    const msg = { "message": "Unable to find that Deployment" }
+                    reponse.status(statusCode.NOT_FOUND).json(msg);
+                    return;
+                }
+                else if (upResult.result.nModified <= 0) {
+                    console.log("Cancel Deployment Modify FAIL : ", responseInfo)
+                    const msg = { "message": "Unable to cancel that Deployment" }
+                    reponse.status(statusCode.NOT_MODIFIED).json(msg);
+                    return;
+                }
+                else {
+                    console.log("Cancel Deployment SUCCESS : ", responseInfo)
+                    const msg = { "message": "SUCCESS" }
+                    reponse.status(statusCode.OK).json(msg);
+                    return;
+                }
+            }
+            console.log("How did I get here? : store : " + storeName + " id : " + id);
+            const msg = { "message": "Unkown Error" }
+            reponse.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+            return;
         });
     });
 }
