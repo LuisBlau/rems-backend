@@ -197,7 +197,7 @@ module.exports = function (app, connection, log) {
 
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
-        deploys.find({ retailer_id: retailerId, ...filters }).limit(maxRecords).toArray(function (err, result) {
+        deploys.find({ retailer_id: retailerId, ...filters }).sort({ id: -1}).limit(maxRecords).toArray(function (err, result) {
             results = result;
             //console.log(result)
             res.send(results)
