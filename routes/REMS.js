@@ -17,7 +17,6 @@ var azureClient = new require("mongodb").MongoClient("mongodb://pas-test-nosql-d
 azureClient.connect();
 
 //find retailer id
-var retailerId;
 readRetailerId();
 
 function readRetailerId() {
@@ -31,7 +30,7 @@ function readRetailerId() {
     lineReader.on('line', function (line) {
         if (line.includes("retailer-torico-id")) {
             var values = line.split("=");
-            retailerId = values[1];
+            global.retailerId = values[1];
         }
     });
 
