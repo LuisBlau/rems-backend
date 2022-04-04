@@ -232,7 +232,7 @@ app.get('/registers/extracts', (req, res) => {
 app.get('/registers/dumps', (req, res) => {
    var results = []
    var snapshots = azureClient.db("pas_reloads").collection("dumps");
-   snapshots.find().toArray(function(err, result){
+   snapshots.find({Retailer:retailerId}).toArray(function(err, result){
      results = result;
      console.log(result)
 	let modifiedResults = []
