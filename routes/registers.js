@@ -221,7 +221,7 @@ app.get('/registers/extracts', (req, res) => {
 	    y["InStore"] = x["location"]["Store"]
 		y["Download"] = x["location"]["URL"]
 		y["Version"] = x["values"]["Version"]
-		y["SBreqLink"] = "https://wmpos2:3001/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
+		y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
 		y["ExtractType"] = x["values"]["ExtractType"]
 		y["State"] = x["values"]["State"]
 		modifiedResults.push(y)
@@ -245,7 +245,7 @@ app.get('/registers/dumps', (req, res) => {
 		} else {
 			y["System"] = x["values"]["Controller ID"]
 		}
-		y["SBreqLink"] = "https://wmpos2:3001/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
+		y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
 		y["ExtractType"] = x["values"]["ExtractType"]
 		y["State"] = x["values"]["State"]
 		y["Rids"] = x["values"]["rids"]
