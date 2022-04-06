@@ -2,7 +2,8 @@
 const jwt = require('jsonwebtoken');
 module.exports = function (app, connection, log) {
 	app.get("/auth/login",(req,res) => {
-		if(req.query["username"] != "invalid") {
+		console.log(req)
+		if(req.params["username"] != "invalid") {
 			res.send(403)
 			return
 		}
