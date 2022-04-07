@@ -264,8 +264,10 @@ app.get('/registers/dumps', (req, res) => {
 	let modifiedResults = []
 	for (var x of results) {
 		var y = x
-		y["Download"] = x["location"]["URL"]
+    
+    y["Download"] = x["location"]["URL"]
 		y["Version"] = x["values"]["Version"]
+    y["Reason"] = x["values"]["Reason"]
 		if(x["RegNum"]) {
 			y["System"] = x["RegNum"]
 		} else {
@@ -275,7 +277,8 @@ app.get('/registers/dumps', (req, res) => {
 		y["ExtractType"] = x["values"]["ExtractType"]
 		y["State"] = x["values"]["State"]
 		y["Rids"] = x["values"]["rids"]
-		modifiedResults.push(y)
+    
+    modifiedResults.push(y)
 	}
 	res.send(modifiedResults)
   });
