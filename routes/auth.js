@@ -2,6 +2,7 @@
 const jwt = require('jsonwebtoken');
 module.exports = function (app, connection, log) {
 	app.get("/auth/login",(req,res) => {
+		console.log("test2")
 		if(req.query["username"] != "invalid") {
 			res.send(403)
 			return
@@ -15,6 +16,7 @@ module.exports = function (app, connection, log) {
 		res.send(200)
 	})
 	app.get("/auth/checkauth",(req,res) => {
+		console.log("Test")
 		try {
 			var decoded = jwt.verify(req.cookies["auth"], secret);
 		} catch(err) {
@@ -23,8 +25,9 @@ module.exports = function (app, connection, log) {
 			res.send(403)
 			return
 		}
-		console.log(decoded)
+		console.log("Decoded:"+decoded)
 		if(decoded.data.username == undefined) {
+			console.log("invalid username")
 			res.send(403)
 			console.log("invalid username")
 			console.log("invalid username")

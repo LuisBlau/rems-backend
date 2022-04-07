@@ -1,11 +1,37 @@
 const sqlString = require('sqlstring')
 const atob = require("atob")
 const btoa = require("btoa")
+const fs = require('fs');
+const readline = require('readline');
+var bodyParser = require('body-parser');
 
 const { ServiceBusClient } = require("@azure/service-bus");
 const sbClient = new ServiceBusClient("Endpoint=sb://remscomm.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=Dk+TDFecPYBkRKtCqqudv1dnrN2hR5bcEN1t1alztOI=");
 var azureClient = new require("mongodb").MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
+
+var retailerId;
+readRetailerId();
+
+
+
+function readRetailerId() {
+  const fileStream = fs.createReadStream(process.env.REMS_HOME +"/etc/com.toshibacommerce.service.cloudforwarder.cfg");
+
+  const lineReader = readline.createInterface({
+    input: fileStream,
+    crlfDelay: Infinity
+  });
+
+  lineReader.on('line', function (line) {
+    if ( line.includes("retailer-torico-id") )
+    {
+        var values = line.split("=");
+        retailerId = values[1];
+    }
+  });
+
+}
 
 function formatCount(resp) {
   // return Object.assign({}, resp.map((x) => ({
@@ -232,7 +258,7 @@ app.get('/registers/extracts', (req, res) => {
 app.get('/registers/dumps', (req, res) => {
    var results = []
    var snapshots = azureClient.db("pas_reloads").collection("dumps");
-   snapshots.find().toArray(function(err, result){
+   snapshots.find({"Retailer":retailerId}).toArray(function(err, result){
      results = result;
      console.log(result)
 	let modifiedResults = []
