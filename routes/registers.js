@@ -289,7 +289,7 @@ app.get('/registers/dumps', (req, res) => {
 		}
 	  };
 	  console.log("Sending: "+msgSent);
-    const sender = sbClient.createSender("storefilerequest");
+    const sender = sbClient.createSender(retailerId);
 	res.send(sender.sendMessages(msgSent));
   })
 }

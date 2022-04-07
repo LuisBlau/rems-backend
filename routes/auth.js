@@ -2,13 +2,13 @@
 const jwt = require('jsonwebtoken');
 module.exports = function (app, connection, log) {
 	app.get("/auth/login",(req,res) => {
-		if(req.query["username"] != "invalid") {
+		if(req.query["username"] != "foodland") {
 			res.send(403)
 			return
 		}
 		var c = jwt.sign({
 			exp: Math.floor(Date.now() / 1000) + (60 * 60), //expires in 1 hour
-			data: {"username":"invalid"}
+			data: {"username":"foodland"}
 		}, secret)
 		console.log(c)
 		res.cookie("auth",c);
