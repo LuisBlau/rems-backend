@@ -292,7 +292,7 @@ app.get('/registers/dumps', (req, res) => {
 		}
 	  };
 	  console.log("Sending: "+msgSent);
-    const sender = sbClient.createSender(retailerId);
+    const sender = sbClient.createSender(retailerId.toLowerCase());
 	res.send(sender.sendMessages(msgSent));
   })
 }
