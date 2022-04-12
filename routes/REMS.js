@@ -237,15 +237,17 @@ module.exports = function (app, connection, log) {
         if (req.query.store) filters.storeName = { $regex: ".*" + req.query.store + ".*" }
         if (req.query.package && parseInt(req.query.package) > 0) filters.config_id = parseInt(req.query.package)
         if (req.query.records) maxRecords = parseInt(req.query.records);
+        if (req.query.status && "All" !== req.query.status) filters.status = req.query.status;
 
         // console.log("Filter")
-        // console.log(JSON.stringify({ retailer_id: retailerId, ...filters }))
+        console.log(JSON.stringify({ retailer_id: retailerId, ...filters }));
+        console.log(filters);
 
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
         deploys.find({ retailer_id: retailerId, ...filters }).sort({ id: -1}).limit(maxRecords).toArray(function (err, result) {
             results = result;
-            //console.log(result)
+            console.log(result)
             res.send(results)
         });
     });
