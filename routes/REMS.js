@@ -185,6 +185,7 @@ module.exports = function (app, connection, log) {
         //query biggest index
         var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
         var results = [];
+        console.log("retailer:"+retailerId+" name:"+req.body.name)
 
         deployConfig.find({ retailer_id: retailerId, name:req.body.name }).toArray(function (err_find2, result2) {
             if (err_find2) {
@@ -193,8 +194,7 @@ module.exports = function (app, connection, log) {
                 //throw err_find2
                 return
             }
-            
-            if ( result.length > 0 ) {
+             if ( result2.length > 0 ) {
                 const msg = { "message": "Duplicate" }
                 res.status(statusCode.OK).json(msg);
                 return
