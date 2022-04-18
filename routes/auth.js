@@ -2,7 +2,8 @@
 const jwt = require('jsonwebtoken');
 module.exports = function (app, connection, log) {
 	app.get("/auth/login",(req,res) => {
-		if(req.query["username"] != "foodland") {
+		if(req.query["username"] != "foodland" ||
+		    req.query["password"] != "test" ) {
 			res.send(403)
 			return
 		}
