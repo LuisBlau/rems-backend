@@ -6,7 +6,7 @@ const fs = require('fs');
 const readline = require('readline');
 var bodyParser = require('body-parser');
 const _ = require('lodash');
-const { isRegExp } = require('lodash');
+const { isRegExp, filter } = require('lodash');
 const statusCode = require('http-status-codes').StatusCodes
 
 // setup dirs
@@ -240,14 +240,14 @@ module.exports = function (app, connection, log) {
         if (req.query.status && "All" !== req.query.status) filters.status = req.query.status;
 
         // console.log("Filter")
-        console.log(JSON.stringify({ retailer_id: retailerId, ...filters }));
-        console.log(filters);
+        // console.log(JSON.stringify({ retailer_id: retailerId, ...filters }));
+        // console.log(filters);
 
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
         deploys.find({ retailer_id: retailerId, ...filters }).sort({ id: -1}).limit(maxRecords).toArray(function (err, result) {
             results = result;
-            console.log(result)
+            // console.log(result)
             res.send(results)
         });
     });
@@ -480,6 +480,134 @@ module.exports = function (app, connection, log) {
             const msg = { "message": "Unknown Error" }
             response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
             return;
+        });
+    });
+
+    app.get('/REMS/store-list', (req, res) => {
+        var results = []
+
+        console.log(JSON.stringify({ retailer_id: retailerId}));
+
+        var deploys = azureClient.db("pas_software_distribution").collection("store-list");
+        
+        deploys.find({ retailer_id: retailerId}).toArray(function (err, result) {
+            
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                res.send();
+            } else if (!result) {
+                const msg = { "message": "No store available for this retailer" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+                res.send();
+            }else {
+                results = result;
+                console.log(results);
+                res.send(results)
+            }
+
+        });
+    });
+
+    app.get('/REMS/specific-store-agent-names', (req, res) => {
+        var results = []
+        let filters = {}
+        var maxRecords = 0;
+        if (req.query.storeId) filters.id = req.query.storeId;
+
+        console.log(JSON.stringify({ retailer_id: retailerId, ...filters}));
+        // console.log(filters);
+
+        var deploys = azureClient.db("pas_software_distribution").collection("store-list");
+        
+        deploys.find({ retailer_id: retailerId, ...filters}).toArray(function (err, result) {
+            
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                res.send();
+            } else if (!result) {
+                const msg = { "message": "No store available for this retailer" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+                res.send();
+            }else {
+                result.forEach(function(item) {
+                    results = results.concat(item.agents);
+                });
+                console.log(results);
+                res.send(results)
+            }
+
+        });
+    });
+
+    app.post('/REMS/save-store-data', bodyParser.json(), (req, res) => {
+        console.log("New command set");
+        console.log(JSON.stringify(req.body));
+
+        let filters = {};
+        if (req.body.id) filters.id = req.body.id;
+
+        //query biggest index
+        var deployConfig = azureClient.db("pas_software_distribution").collection("store-list");
+        var results = [];
+        deployConfig.find({ retailer_id: retailerId, ...filter }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
+
+            if (err_find) {
+                const msg = { "error": err_find }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err_find
+            }
+
+            if(req.body.id) {
+
+                const deployQuery = { retailer_id: retailerId, list_name: req.body.list_name, id: req.body.id };
+                const deployUpdate = { $set: { agents: req.body.agents } }
+    
+                deployConfig.updateOne(deployQuery, deployUpdate, function (err, res) {
+                    if (err) {
+                        const msg = { "error": err }
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        throw err;
+                    }
+                });
+    
+                console.log("Updated");
+    
+
+            } else {
+
+                var index = 0;
+                if (result.length > 0) {
+                    index = result[0].id;
+                }
+                index++;
+
+                var toInsert = {
+                    id: index.toString(),
+                    list_name: req.body.list_name,
+                    retailer_id: retailerId,
+                    agents: []
+                }
+    
+                toInsert.agents = toInsert.agents.concat(req.body.agents);
+                
+                console.log(JSON.stringify(toInsert));
+    
+                deployConfig.insertOne(toInsert, function (err, res) {
+                    if (err) {
+                        const msg = { "error": err }
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        throw err;
+                    }
+                });
+    
+                console.log("Inserted");
+    
+            }
+
+            const msg = { "message": "Success" }
+            res.status(statusCode.OK).json(msg);
         });
     });
 }
