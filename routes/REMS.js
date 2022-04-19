@@ -215,8 +215,7 @@ module.exports = function (app, connection, log) {
                 })
             }
             console.log(JSON.stringify(toInsert));
-
-            deployConfig.insertOne(toInsert, function (err, res) {
+            deployConfig.updateOne({"name": req.body.name},{"$set":toInsert},{upsert:true}, function (err, res) {
                 if (err) {
                     const msg = { "error": err }
                     res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -230,7 +229,7 @@ module.exports = function (app, connection, log) {
         })
     })
 
-    app.get('/REMS/deploys', (req, res) => {
+    app.get('/REMS/deploys', (req, res) => { //TODO: refactor to a POST request
         var results = []
         let filters = {}
         var maxRecords = 0;
@@ -249,14 +248,16 @@ module.exports = function (app, connection, log) {
             res.send(results)
         });
     });
+    
+    app.post('/REMS/get-deploys', (req,res) => {
+		
+	});
 
     app.get('/REMS/deploy-configs', (req, res) => {
         // console.log("GET deploy-configs request ")
         var results = [];
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        configs.find({ retailer_id: retailerId, name: { $ne: "Missing name" } }, {
-            projection: { steps: false, retailer_id: false, _id: false }
-        }).toArray(function (err, result) {
+        configs.find({ retailer_id: retailerId, name: { $ne: "Missing name" } }).toArray(function (err, result) {
             results = result;
             res.send(results);
         });
