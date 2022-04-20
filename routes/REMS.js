@@ -488,9 +488,9 @@ module.exports = function (app, connection, log) {
 
         console.log(JSON.stringify({ retailer_id: retailerId}));
 
-        var deploys = azureClient.db("pas_software_distribution").collection("store-list");
+        var storeList = azureClient.db("pas_software_distribution").collection("store-list");
         
-        deploys.find({ retailer_id: retailerId}).toArray(function (err, result) {
+        storeList.find({ retailer_id: retailerId}).toArray(function (err, result) {
             
             if (err) {
                 const msg = { "error": err }
@@ -561,10 +561,10 @@ module.exports = function (app, connection, log) {
 
             if(req.body.id) {
 
-                const deployQuery = { retailer_id: retailerId, list_name: req.body.list_name, id: req.body.id };
-                const deployUpdate = { $set: { agents: req.body.agents } }
+                const storeListUpdateQuery = { retailer_id: retailerId, list_name: req.body.list_name, id: req.body.id };
+                const storeListUpdateAgent = { $set: { agents: req.body.agents } }
     
-                deployConfig.updateOne(deployQuery, deployUpdate, function (err, res) {
+                deployConfig.updateOne(storeListUpdateQuery, storeListUpdateAgent, function (err, res) {
                     if (err) {
                         const msg = { "error": err }
                         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
