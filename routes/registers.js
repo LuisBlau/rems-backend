@@ -13,8 +13,6 @@ azureClient.connect();
 var retailerId;
 readRetailerId();
 
-
-
 function readRetailerId() {
   const fileStream = fs.createReadStream(process.env.REMS_HOME +"/etc/com.toshibacommerce.service.cloudforwarder.cfg");
 
@@ -298,14 +296,18 @@ app.get('/registers/dumps', (req, res) => {
 	res.send(sender.sendMessages(msgSent));
   })
   
-  app.post("/registers/requestDump", (req,res) => {
-	  console.log(req.params)
+
+  app.post("/registers/requestDump/",bodyParser.json(),  (req,res) => {
+    console.log("requestDump")
+  
+	  console.log(req.body)
+    console.log(JSON.stringify(req.body))
+    //console.log(req)
 	  msgSent = {"body": {
 		  "retailer":req.body["retailer_id"],
 		  "store":req.body["store_name"], 
 		  "agent":req.body["agent"],
-		  "dataCapture":"Elera",
-		  "reboot":"soft"
+		  "dataCapture":req.body["dataCapture"]
 		}
 	  };
 	  console.log("Sending: "+msgSent);
