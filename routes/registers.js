@@ -283,6 +283,8 @@ app.get('/registers/dumps', (req, res) => {
 	res.send(modifiedResults)
   });
   });
+
+
   app.get('/registers/extracts/:string', (req, res) => {
 	  j = JSON.parse(atob(req.params["string"]))
 	  msgSent = {"body": {
@@ -295,5 +297,43 @@ app.get('/registers/dumps', (req, res) => {
     const sender = sbClient.createSender(retailerId.toLowerCase());
 	res.send(sender.sendMessages(msgSent));
   })
-}
 
+
+app.get('/registers/captures', (req, res) => {
+  var results = []
+  var snapshots = azureClient.db("pas_reloads").collection("captures");
+
+  snapshots.find({"Retailer":retailerId}).toArray(function(err, result){
+    results = result;
+    console.log(result)
+ let modifiedResults = []
+ for (var x of results) {
+   var y = x
+   
+   y["Download"] = x["location"]["URL"]
+   y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
+   y["CaptureType"] = x["values"]["CaptureType"]
+   y["Agent"] = x["values"]["Agent"]
+   y["CaptureSource"] = x["values"]["CaptureSource"]
+   
+   modifiedResults.push(y)
+ }
+ res.send(modifiedResults)
+ });
+});
+
+
+app.get('/registers/captures/:string', (req, res) => {
+  j = JSON.parse(atob(req.params["string"]))
+  msgSent = {"body": {
+    "retailer":j.Retailer,
+    "store":j.Store, 
+    "filename":j.values.File
+  }
+  };
+  console.log("Sending: "+JSON.stringify(msgSent));
+  const sender = sbClient.createSender(retailerId.toLowerCase());
+res.send(sender.sendMessages(msgSent));
+});
+
+}
