@@ -297,7 +297,21 @@ app.get('/registers/dumps', (req, res) => {
     const sender = sbClient.createSender(retailerId.toLowerCase());
 	res.send(sender.sendMessages(msgSent));
   })
-
+  
+  app.post("/registers/requestDump", (req,res) => {
+	  console.log(req.params)
+	  msgSent = {"body": {
+		  "retailer":req.body["retailer_id"],
+		  "store":req.body["store_name"], 
+		  "agent":req.body["agent"],
+		  "dataCapture":"Elera",
+		  "reboot":"soft"
+		}
+	  };
+	  console.log("Sending: "+msgSent);
+    const sender = sbClient.createSender(retailerId.toLowerCase());
+	res.send(sender.sendMessages(msgSent));
+  })
 
 app.get('/registers/captures', (req, res) => {
   var results = []
