@@ -208,18 +208,19 @@ module.exports = function (app, connection, log) {
                     throw err_find
                 }
 
-                var index = 0;
-                if (result.length > 0) {
-                    index = result[0].id;
-                }
-                index++;
-
-                var toInsert = {
-                    id: index,
-                    name: req.body.name,
-                    retailer_id: retailerId,
-                    steps: []
-                    //  config_steps:req.body.steps
+            for (var i = 0; i < req.body.steps.length; i++) {
+                console.log("Step " + i + " type=" + req.body.steps[i].type)
+                toInsert.steps.push({
+                    type: req.body.steps[i].type,
+                    ...req.body.steps[i].arguments
+                })
+            }
+            console.log(JSON.stringify(toInsert));
+            deployConfig.updateOne({"name": req.body.name},{"$set":toInsert},{upsert:true}, function (err, res) {
+                if (err) {
+                    const msg = { "error": err }
+                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                    throw err;
                 }
 
                 for (var i = 0; i < req.body.steps.length; i++) {
@@ -246,7 +247,7 @@ module.exports = function (app, connection, log) {
         })
     })
 
-    app.get('/REMS/deploys', (req, res) => {
+    app.get('/REMS/deploys', (req, res) => { //TODO: refactor to a POST request
         var results = []
         let filters = {}
         var maxRecords = 0;
@@ -267,14 +268,16 @@ module.exports = function (app, connection, log) {
             res.send(results)
         });
     });
+    
+    app.post('/REMS/get-deploys', (req,res) => {
+		
+	});
 
     app.get('/REMS/deploy-configs', (req, res) => {
         // console.log("GET deploy-configs request ")
         var results = [];
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        configs.find({ retailer_id: retailerId, name: { $ne: "Missing name" } }, {
-            projection: { steps: false, retailer_id: false, _id: false }
-        }).toArray(function (err, result) {
+        configs.find({ retailer_id: retailerId, name: { $ne: "Missing name" } }).toArray(function (err, result) {
             results = result;
             res.send(results);
         });
