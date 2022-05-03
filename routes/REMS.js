@@ -199,7 +199,7 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.OK).json(msg);
                 return
             }
-        
+        })
             deployConfig.find({ retailer_id: retailerId }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
 
                 if (err_find) {
