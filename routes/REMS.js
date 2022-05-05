@@ -272,9 +272,7 @@ module.exports = function (app, connection, log) {
         // console.log("GET deploy-configs request ")
         var results = [];
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        configs.find({ retailer_id: retailerId, name: { $ne: "Missing name" } }, {
-            projection: { steps: false, retailer_id: false, _id: false }
-        }).toArray(function (err, result) {
+        configs.find({ retailer_id: retailerId, name: { $ne: "Missing name" } }).toArray(function (err, result) {
             results = result;
             res.send(results);
         });
