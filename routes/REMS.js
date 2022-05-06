@@ -432,7 +432,7 @@ module.exports = function (app, connection, log) {
         }
         const agents = azureClient.db("pas_software_distribution").collection("agents");
         agents.find({ retailer_id: retailerId, ...filters }, {
-            projection: { storeName: true, agentName: true, _id: false }
+            projection: { retailer_id: true, storeName: true, agentName: true, _id: false }
         }).toArray(function (err, agentList) {
             if (err) {
                 const msg = { "error": err }

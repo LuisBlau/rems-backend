@@ -13,8 +13,6 @@ azureClient.connect();
 var retailerId;
 readRetailerId();
 
-
-
 function readRetailerId() {
   const fileStream = fs.createReadStream(process.env.REMS_HOME +"/etc/com.toshibacommerce.service.cloudforwarder.cfg");
 
@@ -283,6 +281,8 @@ app.get('/registers/dumps', (req, res) => {
 	res.send(modifiedResults)
   });
   });
+
+
   app.get('/registers/extracts/:string', (req, res) => {
 	  j = JSON.parse(atob(req.params["string"]))
 	  msgSent = {"body": {
@@ -295,5 +295,61 @@ app.get('/registers/dumps', (req, res) => {
     const sender = sbClient.createSender(retailerId.toLowerCase());
 	res.send(sender.sendMessages(msgSent));
   })
-}
+  
 
+  app.post("/registers/requestDump/",bodyParser.json(),  (req,res) => {
+    console.log("requestDump")
+  
+	  console.log(req.body)
+    console.log(JSON.stringify(req.body))
+    //console.log(req)
+	  msgSent = {"body": {
+		  "retailer":req.body["retailer_id"],
+		  "store":req.body["store_name"], 
+		  "agent":req.body["agent"],
+		  "dataCapture":req.body["dataCapture"]
+		}
+	  };
+	  console.log("Sending: "+msgSent);
+    const sender = sbClient.createSender(retailerId.toLowerCase());
+	res.send(sender.sendMessages(msgSent));
+  })
+
+app.get('/registers/captures', (req, res) => {
+  var results = []
+  var snapshots = azureClient.db("pas_reloads").collection("captures");
+
+  snapshots.find({"Retailer":retailerId}).toArray(function(err, result){
+    results = result;
+    console.log(result)
+ let modifiedResults = []
+ for (var x of results) {
+   var y = x
+   
+   y["Download"] = x["location"]["URL"]
+   y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
+   y["CaptureType"] = x["values"]["CaptureType"]
+   y["Agent"] = x["values"]["Agent"]
+   y["CaptureSource"] = x["values"]["CaptureSource"]
+   
+   modifiedResults.push(y)
+ }
+ res.send(modifiedResults)
+ });
+});
+
+
+app.get('/registers/captures/:string', (req, res) => {
+  j = JSON.parse(atob(req.params["string"]))
+  msgSent = {"body": {
+    "retailer":j.Retailer,
+    "store":j.Store, 
+    "filename":j.values.File
+  }
+  };
+  console.log("Sending: "+JSON.stringify(msgSent));
+  const sender = sbClient.createSender(retailerId.toLowerCase());
+res.send(sender.sendMessages(msgSent));
+});
+
+}
