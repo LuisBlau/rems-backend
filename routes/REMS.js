@@ -184,28 +184,27 @@ module.exports = function (app, connection, log) {
         //query biggest index
         var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
         var results = [];
-        console.log("retailer:"+retailerId+" name:"+req.body.name)
+        deployConfig.find({ retailer_id: retailerId }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
 
-        deployConfig.find({ retailer_id: retailerId, name:req.body.name }).toArray(function (err_find2, result2) {
-            if (err_find2) {
-                const msg = { "error": err_find2 }
+            if (err_find) {
+                const msg = { "error": err_find }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                //throw err_find2
-                return
+                throw err_find
             }
-             if ( result2.length > 0 ) {
-                const msg = { "message": "Duplicate" }
-                res.status(statusCode.OK).json(msg);
-                return
-            }
-        })
-            deployConfig.find({ retailer_id: retailerId }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
 
-                if (err_find) {
-                    const msg = { "error": err_find }
-                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                    throw err_find
-                }
+            var index = 0;
+            if (result.length > 0) {
+                index = result[0].id;
+            }
+            index++;
+
+            var toInsert = {
+                id: index,
+                name: req.body.name,
+                retailer_id: retailerId,
+                steps: []
+                //  config_steps:req.body.steps
+            }
 
             for (var i = 0; i < req.body.steps.length; i++) {
                 console.log("Step " + i + " type=" + req.body.steps[i].type)
@@ -221,30 +220,14 @@ module.exports = function (app, connection, log) {
                     res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                     throw err;
                 }
-
-                for (var i = 0; i < req.body.steps.length; i++) {
-                    console.log("Step " + i + " type=" + req.body.steps[i].type)
-                    toInsert.steps.push({
-                        type: req.body.steps[i].type,
-                        ...req.body.steps[i].arguments
-                    })
-                }
-                console.log(JSON.stringify(toInsert));
-
-                deployConfig.insertOne(toInsert, function (err, res) {
-                    if (err) {
-                        const msg = { "error": err }
-                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                        throw err;
-                    }
-                });
+            });
 
                 console.log("Inserted");
                 const msg = { "message": "Success" }
                 res.status(statusCode.OK).json(msg);
-            })
         })
     })
+
 
     app.get('/REMS/deploys', (req, res) => { //TODO: refactor to a POST request
         var results = []
