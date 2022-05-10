@@ -66,17 +66,16 @@ async function lookupAgents(stores) {
 
     if (stores.length > 0) {
         const promises = stores.map(async store => {
-            const agents = azureClient.db("pas_software_distribution").collection("agents");
+            const agents = azureClient.db("pas_software_distribution").collection("store-list");
             try {
                 const response = await agents.findOne({
                     retailer_id: retailerId,
-                    storeName: store.name,
-                    is_master: true
+                    list_name: store.name
                 })
                 return {
                     index: store.index,
                     storeName: store.name,
-                    agentName: (!response) ? null : response.agentName
+                    agentName: (!response) ? null : response.agents.join()
                 }
             }
             catch (error) {
@@ -379,8 +378,11 @@ module.exports = function (app, connection, log) {
                         }
                     })
 
+                    console.log(missingAgent);
+
                     lookupAgents(missingAgent).then(agents => {
                         var noAgent = "";
+                        console.log(agents);
                         if (agents) {
                             agents.map(agent => {
                                 if (agent.agentName) {
@@ -391,6 +393,7 @@ module.exports = function (app, connection, log) {
                                 }
                             })
                         }
+                        console.log(newRecords);
 
                         if (noAgent.length > 0) {
                             /* I wanted to send an error here, but we cannot add a message to an error response
