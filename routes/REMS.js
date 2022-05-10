@@ -449,6 +449,28 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.get('/REMS/stores', (req, res) => {
+        console.log("Get /REMS/stores received : ", req.query)
+        var results = [];
+        let filters = {}
+
+        const agents = azureClient.db("pas_software_distribution").collection("stores");
+        agents.find({ retailer_id: retailerId, ...filters }, {}).toArray(function (err, agentList) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!agentList) {
+                const msg = { "message": "Agents: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+                console.log("sending agentList : ", agentList)
+                res.status(statusCode.OK).json(agentList);
+            }
+        });
+    });
+
     app.post('/deploy-cancel', bodyParser.json(), (request, response) => {
         console.log("POST deploy-update received : ", request.body)
         const storeName = request.body.storeName;
