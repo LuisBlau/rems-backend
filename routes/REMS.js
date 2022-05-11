@@ -66,16 +66,18 @@ async function lookupAgents(stores) {
 
     if (stores.length > 0) {
         const promises = stores.map(async store => {
-            const agents = azureClient.db("pas_software_distribution").collection("store-list");
+            const agents = azureClient.db("pas_software_distribution").collection("agents");
             try {
                 const response = await agents.findOne({
                     retailer_id: retailerId,
-                    list_name: store.name
+                    storeName: store.name,
+                    is_master: true
+
                 })
                 return {
                     index: store.index,
                     storeName: store.name,
-                    agentName: (!response) ? null : response.agents.join()
+                    agentName: (!response) ? null : response.agentName
                 }
             }
             catch (error) {
@@ -272,6 +274,32 @@ module.exports = function (app, connection, log) {
         const name = req.body.name
         const id = req.body.id
         let storeList = req.body.storeList
+        let listNames = req.body.listNames
+
+        if(listNames){
+            var agentsNames = [];
+            let filters = {};
+
+            listNames.split(",").forEach (val => {
+                
+                filters.list_name = val;
+                var storeListDbClient = azureClient.db("pas_software_distribution").collection("store-list");
+                                
+                storeListDbClient.findOne({ retailer_id: retailerId, ...filters}, function (err, result) {
+                    
+                    if (err) {
+                        const msg = { "error": err }
+                        console.log(msg);
+                    } else if (!result) {
+                        console.log("No store available for this retailer");
+                    }else {
+                        agentsNames = agentsNames.concat(result.agents);
+                        storeList = agentsNames.join();
+                    }
+                    
+                });
+            });                
+        }
 
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
         configs.findOne({ retailer_id: retailerId, name: name, id: id }, function (err, config) {
@@ -329,6 +357,7 @@ module.exports = function (app, connection, log) {
                     storeList = storeList.replace(/(?:,)+/g, ',');
 
                     var indx = 0;
+                
                     storeList.split(',').forEach(val => {
 
                         /* The line break substitution above may add an extra comma
