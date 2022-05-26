@@ -6,6 +6,7 @@ const readline = require('readline');
 var bodyParser = require('body-parser');
 
 const { ServiceBusClient } = require("@azure/service-bus");
+const { Console } = require('console');
 const sbClient = new ServiceBusClient("Endpoint=sb://remscomm.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=Dk+TDFecPYBkRKtCqqudv1dnrN2hR5bcEN1t1alztOI=");
 var azureClient = new require("mongodb").MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
@@ -352,4 +353,20 @@ app.get('/registers/captures/:string', (req, res) => {
 res.send(sender.sendMessages(msgSent));
 });
 
+app.get('/registers/commands/:string', (req, res) => {
+  j = JSON.parse(atob(req.params["string"]))
+  msgSent = {"body": {
+    "retailer":j.Retailer,
+    "store":j.Store, 
+    "agent":j.Agent,
+    "command":j.Command
+  }
+  };
+  console.log("Sending: "+JSON.stringify(msgSent));
+  const sender = sbClient.createSender(retailerId.toLowerCase());
+res.send(sender.sendMessages(msgSent));
+});
+
+
 }
+

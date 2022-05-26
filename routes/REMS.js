@@ -445,10 +445,13 @@ module.exports = function (app, connection, log) {
             console.log("onlyMasters : ", req.query.onlyMasters)
             filters.is_master = true
         }
+
+        if (req.query.store !== undefined ) {
+            console.log("Agent search with store "+req.query.store)
+            filters.storeName=req.query.store;
+        }
         const agents = azureClient.db("pas_software_distribution").collection("agents");
-        agents.find({ retailer_id: retailerId, ...filters }, {
-            projection: { retailer_id: true, storeName: true, agentName: true, _id: false }
-        }).toArray(function (err, agentList) {
+        agents.find({ retailer_id: retailerId, ...filters }, {}).toArray(function (err, agentList) {
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -458,7 +461,7 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending agentList : ", agentList)
+                console.log("sending agentList : ");//, agentList)
                 res.status(statusCode.OK).json(agentList);
             }
         });
@@ -480,7 +483,7 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending agentList : ", agentList)
+                console.log("sending storeList : ", agentList)
                 res.status(statusCode.OK).json(agentList);
             }
         });
