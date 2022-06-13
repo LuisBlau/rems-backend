@@ -343,7 +343,7 @@ app.get('/registers/commands/:string', (req, res) => {
   }
   };
   console.log("Sending: "+JSON.stringify(msgSent));
-  const sender = sbClient.createSender(retailerId.toLowerCase());
+  const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 res.send(sender.sendMessages(msgSent));
 });
 
