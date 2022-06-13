@@ -19,24 +19,6 @@ azureClient.connect();
 /* cSpell:enable */
 
 //find retailer id
-readRetailerId();
-
-function readRetailerId() {
-    const fileStream = fs.createReadStream(process.env.REMS_HOME + "/etc/com.toshibacommerce.service.cloudforwarder.cfg");
-
-    const lineReader = readline.createInterface({
-        input: fileStream,
-        crlfDelay: Infinity
-    });
-
-    lineReader.on('line', function (line) {
-        if (line.includes("retailer-torico-id")) {
-            var values = line.split("=");
-            global.retailerId = values[1];
-        }
-    });
-
-}
 
 function sendRelevantJSON(res, jsonPath) {
     res.send(JSON.parse(
@@ -69,10 +51,9 @@ async function lookupAgents(stores) {
             const agents = azureClient.db("pas_software_distribution").collection("agents");
             try {
                 const response = await agents.findOne({
-                    retailer_id: retailerId,
+                    retailer_id: req.cookies["retailerId"],
                     storeName: store.name,
                     is_master: true
-
                 })
                 return {
                     index: store.index,
@@ -134,7 +115,7 @@ module.exports = function (app, connection, log) {
             //query biggest index
             var uploads = azureClient.db("pas_software_distribution").collection("uploads");
             var results = [];
-            uploads.find({ retailer_id: retailerId }).sort({ id: -1 }).limit(1).toArray(function (err, result) {
+            uploads.find({ retailer_id: req.cookies["retailerId"] }).sort({ id: -1 }).limit(1).toArray(function (err, result) {
                 results = result;
                 var index = 0;
 
@@ -157,7 +138,7 @@ module.exports = function (app, connection, log) {
                     if (err) throw err;
                 });
 
-                var newFile = { id: index, retailer_id: retailerId, filename: filename, inserted: currentdate.getTime(), timestamp: datetime, archived: "false", description: fields["description"][0] };
+                var newFile = { id: index, retailer_id: req.cookies["retailerId"], filename: filename, inserted: currentdate.getTime(), timestamp: datetime, archived: "false", description: fields["description"][0] };
                 uploads.insertOne(newFile, function (err, res) {
                     if (err) throw err;
                 });
@@ -171,7 +152,7 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/uploads', (req, res) => {
         var results = []
         var uploads = azureClient.db("pas_software_distribution").collection("uploads");
-        uploads.find({ retailer_id: retailerId }).toArray(function (err, result) {
+        uploads.find({ retailer_id: req.cookies["retailerId"] }).toArray(function (err, result) {
             results = result;
             console.log(result)
 
@@ -186,7 +167,7 @@ module.exports = function (app, connection, log) {
         //query biggest index
         var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
         var results = [];
-        deployConfig.find({ retailer_id: retailerId }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
+        deployConfig.find({ retailer_id: req.cookies["retailerId"] }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
 
             if (err_find) {
                 const msg = { "error": err_find }
@@ -246,7 +227,7 @@ module.exports = function (app, connection, log) {
 
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
-        deploys.find({ retailer_id: retailerId, ...filters }).sort({ id: -1}).limit(maxRecords).toArray(function (err, result) {
+        deploys.find({ retailer_id: req.cookies["retailerId"], ...filters }).sort({ id: -1}).limit(maxRecords).toArray(function (err, result) {
             results = result;
             // console.log(result)
             res.send(results)
@@ -261,7 +242,7 @@ module.exports = function (app, connection, log) {
         // console.log("GET deploy-configs request ")
         var results = [];
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        configs.find({ retailer_id: retailerId, name: { $ne: "Missing name" } }).toArray(function (err, result) {
+        configs.find({ retailer_id: req.cookies["retailerId"], name: { $ne: "Missing name" } }).toArray(function (err, result) {
             results = result;
             res.send(results);
         });
@@ -302,7 +283,7 @@ module.exports = function (app, connection, log) {
         }
 
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        configs.findOne({ retailer_id: retailerId, name: name, id: id }, function (err, config) {
+        configs.findOne({ retailer_id: req.cookies["retailerId"], name: name, id: id }, function (err, config) {
 
             if (err) {
                 const msg = { "error": err }
@@ -438,6 +419,7 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/agents', (req, res) => {
         console.log("Get /REMS/agents received : ", req.query)
+		console.log(req.cookies["retailerId"])
         var results = [];
         let filters = {}
 
@@ -451,7 +433,7 @@ module.exports = function (app, connection, log) {
             filters.storeName=req.query.store;
         }
         const agents = azureClient.db("pas_software_distribution").collection("agents");
-        agents.find({ retailer_id: retailerId, ...filters }, {}).toArray(function (err, agentList) {
+        agents.find({ retailer_id: req.cookies["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -473,7 +455,7 @@ module.exports = function (app, connection, log) {
         let filters = {}
 
         const agents = azureClient.db("pas_software_distribution").collection("stores");
-        agents.find({ retailer_id: retailerId, ...filters }, {}).toArray(function (err, agentList) {
+        agents.find({ retailer_id: req.cookies["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -495,7 +477,7 @@ module.exports = function (app, connection, log) {
         const id = request.body.id;
         const newStatus = "Cancel";
 
-        const deployQuery = { retailer_id: retailerId, storeName: storeName, id: parseInt(id), status: { $in: ["initial", "Initial", "Pending", "pending"] } };
+        const deployQuery = { retailer_id: req.cookies["retailerId"], storeName: storeName, id: parseInt(id), status: { $in: ["initial", "Initial", "Pending", "pending"] } };
         const deployUpdate = { $set: { status: newStatus } }
 
         const deploys = azureClient.db("pas_software_distribution").collection("deployments")
@@ -545,11 +527,11 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/store-list', (req, res) => {
         var results = []
 
-        console.log(JSON.stringify({ retailer_id: retailerId}));
+        console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"]}));
 
         var storeList = azureClient.db("pas_software_distribution").collection("store-list");
         
-        storeList.find({ retailer_id: retailerId}).toArray(function (err, result) {
+        storeList.find({ retailer_id: req.cookies["retailerId"]}).toArray(function (err, result) {
             
             if (err) {
                 const msg = { "error": err }
@@ -574,12 +556,12 @@ module.exports = function (app, connection, log) {
         var maxRecords = 0;
         if (req.query.storeId) filters.id = req.query.storeId;
 
-        console.log(JSON.stringify({ retailer_id: retailerId, ...filters}));
+        console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"], ...filters}));
         // console.log(filters);
 
         var deploys = azureClient.db("pas_software_distribution").collection("store-list");
         
-        deploys.find({ retailer_id: retailerId, ...filters}).toArray(function (err, result) {
+        deploys.find({ retailer_id: req.cookies["retailerId"], ...filters}).toArray(function (err, result) {
             
             if (err) {
                 const msg = { "error": err }
@@ -610,7 +592,7 @@ module.exports = function (app, connection, log) {
         //query biggest index
         var deployConfig = azureClient.db("pas_software_distribution").collection("store-list");
         var results = [];
-        deployConfig.find({ retailer_id: retailerId, ...filter }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
+        deployConfig.find({ retailer_id: req.cookies["retailerId"], ...filter }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
 
             if (err_find) {
                 const msg = { "error": err_find }
@@ -620,7 +602,7 @@ module.exports = function (app, connection, log) {
 
             if(req.body.id) {
 
-                const storeListUpdateQuery = { retailer_id: retailerId, list_name: req.body.list_name, id: req.body.id };
+                const storeListUpdateQuery = { retailer_id: req.cookies["retailerId"], list_name: req.body.list_name, id: req.body.id };
                 const storeListUpdateAgent = { $set: { agents: req.body.agents } }
     
                 deployConfig.updateOne(storeListUpdateQuery, storeListUpdateAgent, function (err, res) {
@@ -645,7 +627,7 @@ module.exports = function (app, connection, log) {
                 var toInsert = {
                     id: index.toString(),
                     list_name: req.body.list_name,
-                    retailer_id: retailerId,
+                    retailer_id: req.cookies["retailerId"],
                     agents: []
                 }
     
@@ -669,5 +651,9 @@ module.exports = function (app, connection, log) {
             res.status(statusCode.OK).json(msg);
         });
     });
+    app.get('/REMS/retailerids', (req, res) => {
+        res.send(["put","your","retailerId","Here","T0BSUTZ"])
+    })
+
 }
 

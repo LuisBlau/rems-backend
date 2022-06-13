@@ -12,27 +12,6 @@ const sbClient = new ServiceBusClient("Endpoint=sb://remscomm.servicebus.windows
 var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
 
-var retailerId;
-readRetailerId();
-
-function readRetailerId() {
-  const fileStream = fs.createReadStream(process.env.REMS_HOME +"/etc/com.toshibacommerce.service.cloudforwarder.cfg");
-
-  const lineReader = readline.createInterface({
-    input: fileStream,
-    crlfDelay: Infinity
-  });
-
-  lineReader.on('line', function (line) {
-    if ( line.includes("retailer-torico-id") )
-    {
-        var values = line.split("=");
-        retailerId = values[1];
-    }
-  });
-
-}
-
 function formatCount(resp) {
   // return Object.assign({}, resp.map((x) => ({
   //   "name" : x["property_value"],
@@ -258,7 +237,7 @@ app.get('/registers/extracts', (req, res) => {
 app.get('/registers/dumps', (req, res) => {
    var results = []
    var snapshots = azureClient.db("pas_reloads").collection("dumps");
-   snapshots.find({"Retailer":retailerId}).toArray(function(err, result){
+   snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
      results = result;
      console.log(result)
 	let modifiedResults = []
@@ -294,7 +273,7 @@ app.get('/registers/dumps', (req, res) => {
 		}
 	  };
 	  console.log("Sending: "+msgSent);
-    const sender = sbClient.createSender(retailerId.toLowerCase());
+    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 	res.send(sender.sendMessages(msgSent));
   })
   
@@ -313,7 +292,7 @@ app.get('/registers/dumps', (req, res) => {
 		}
 	  };
 	  console.log("Sending: "+msgSent);
-    const sender = sbClient.createSender(retailerId.toLowerCase());
+    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 	res.send(sender.sendMessages(msgSent));
   })
 
@@ -321,7 +300,7 @@ app.get('/registers/captures', (req, res) => {
   var results = []
   var snapshots = azureClient.db("pas_reloads").collection("captures");
 
-  snapshots.find({"Retailer":retailerId}).toArray(function(err, result){
+  snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
     results = result;
     console.log(result)
  let modifiedResults = []
@@ -350,7 +329,7 @@ app.get('/registers/captures/:string', (req, res) => {
   }
   };
   console.log("Sending: "+JSON.stringify(msgSent));
-  const sender = sbClient.createSender(retailerId.toLowerCase());
+  const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 res.send(sender.sendMessages(msgSent));
 });
 
