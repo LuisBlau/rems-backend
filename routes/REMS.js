@@ -574,6 +574,37 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.get('/REMS/agentScreenShot', (req, res) => {
+        var results = []
+        let filters = {}
+        if (req.query.storeName) filters.storeName = req.query.storeName;
+        if (req.query.agentName) filters.agentName = req.query.agentName;
+        
+        console.log("agentScreenShot "+JSON.stringify(filters));
+        console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"], ...filters}));
+        // console.log(filters);
+
+        var deploys = azureClient.db("pas_software_distribution").collection("agent-screenshot");
+        
+        deploys.find({ retailer_id: req.cookies["retailerId"], ...filters}).toArray(function (err, result) {
+            
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                res.send();
+            } else if (!result) {
+                const msg = { "message": "No store available for this retailer" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+                res.send();
+            }else {
+                console.log(result);
+                res.send(result[0])
+            }
+
+        });
+    });
+
+
     app.get('/REMS/specific-store-agent-names', (req, res) => {
         var results = []
         let filters = {}
