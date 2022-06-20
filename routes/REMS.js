@@ -9,6 +9,10 @@ const _ = require('lodash');
 const { isRegExp, filter } = require('lodash');
 const statusCode = require('http-status-codes').StatusCodes
 const mongodb = require("mongodb")
+const { BlobServiceClient } = require('@azure/storage-blob');
+const { v1: uuidv1} = require('uuid');
+require('dotenv').config()
+
 // setup dirs
 var uploadDir = process.env.REMS_HOME + "/uploads";
 
@@ -73,6 +77,52 @@ async function lookupAgents(stores, retailer_id) {
     }
 }
 
+async function fileUploadToAzure(srcFile, azureFileName) {
+    console.log("Inside method of fileUploadToAzure");
+
+    const AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=pasfileuploads;AccountKey=6Wh7jcTvZYyAGyiyq7nZWcbZHZyNPDnrVLY6OgeDv3CmhRHDBdzWc8dAAgigrEZkxYFyQR2UJ6AO+ASt/Q2DQg==;EndpointSuffix=core.windows.net";
+
+    if (!AZURE_STORAGE_CONNECTION_STRING) {
+        throw Error("Azure Storage Connection string not found");
+    }
+
+    try {
+
+        const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
+            
+            // Create a unique name for the container
+        const containerName = "rems-upload";
+        console.log("\t", containerName);
+        
+        // Get a reference to a container
+        const containerClient = blobServiceClient.getContainerClient(containerName);
+        
+        // Get a block blob client
+        const blockBlobClient = containerClient.getBlockBlobClient(azureFileName);
+        
+        console.log("\nUploading to Azure storage as blob:\n\t", azureFileName);
+        
+        let fileSize = 0;
+        await fs.stat(srcFile.path, (err, stats) => {
+            if (err) {
+                console.log(`File doesn't exist.`);
+            } else {
+                console.log(stats);
+                fileSize = stats.size;
+            }
+        });
+        
+        // Upload data to the blob
+        const uploadBlobResponse = await blockBlobClient.upload(srcFile.path, fileSize);
+        console.log( "Blob was uploaded successfully. requestId: ", uploadBlobResponse.requestId );
+
+    }catch (error) {
+        console.log("Error occurred while file uploading to Azure");
+        throw error;
+    }
+    
+}
+
 module.exports = function (app, connection, log) {
 
 
@@ -135,14 +185,23 @@ module.exports = function (app, connection, log) {
 
 
                 let newFileName = uploadDir + "/" + index.toString() + ".upload"
+
                 fs.copyFile(files["file"][0].path, newFileName, (err) => {
                     if (err) throw err;
                 });
-
-                var newFile = { id: index, retailer_id: retailerId, filename: filename, inserted: currentdate.getTime(), timestamp: datetime, archived: "false", description: fields["description"][0] };
-                uploads.insertOne(newFile, function (err, res) {
-                    if (err) throw err;
-                });
+                
+                let azureFileName = retailerId + "-" + index.toString() + ".upload"
+                fileUploadToAzure(files["file"][0], azureFileName).then(() => {
+                        console.log('Done');
+                        var newFile = { id: index, retailer_id: retailerId, filename: filename, inserted: currentdate.getTime(), timestamp: datetime, archived: "false", description: fields["description"][0] };
+                            uploads.insertOne(newFile, function (err, res) {
+                                if (err) throw err;
+                        });
+                    })
+                    .catch((ex) => {
+                            console.log(ex.message);
+                            throw ex;
+                    });
 
             });
             res.send()
