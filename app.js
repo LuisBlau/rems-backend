@@ -1,5 +1,7 @@
 // Security
 const cors = require('cors')
+const https = require("https")
+const fs = require('fs')
 const helmet = require('helmet')
 const jwtAuth = require("./middleware/jwtauth")
 console.log(cookieParser)
@@ -27,12 +29,13 @@ prefix.apply(log, {
 // Express
 const express = require('express')
 const app = express()
-const port = 3001
+var port = 443
+var httpPort = 80
 app.use(helmet())
 app.use(cors())
 var cookieParser = require('cookie-parser')
 app.use(cookieParser())
-app.use(jwtAuth())
+//app.use(jwtAuth()) turning off the auth cookie
 const mysql = require('mysql2')
 let {DB, HOST, PASSWORD, USER} = require('./db.config')
 
@@ -47,5 +50,19 @@ const connection = new Pool({
 
 require('./routes')(app, connection, log);
 
+const httpsOptions = {
+    key: fs.readFileSync("./default.key"),
+    cert: fs.readFileSync("./default.crt")
+};
 
-app.listen(port, () => console.log(`Example app listening at http://localhost:${port}`))
+// for development
+if ( process.env.RMA_DEV == "true") {
+    console.log("It's a dev box")
+    port=3002
+    httpPort=3001
+}
+
+app.listen(httpPort, () => console.log(`http app listening at port ${httpPort}`))
+//https.createServer(app).listen(port, () => {console.log("server is running at port "+port) })
+https.createServer(httpsOptions, app).listen(port);
+console.log(`https app listening at port ${port}`)
