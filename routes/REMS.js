@@ -308,6 +308,23 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.get('/REMS/delete-deploy-config', (req, res) => {
+        var id = req.query.id;
+        var dbQuery = { retailer_id: req.cookies["retailerId"], id: parseInt(id) };
+        const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
+        configs.deleteOne(dbQuery, function (err, result) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                return;
+            } else {
+                const msg = { "message": "Deploy-Config deleted successfully" }
+                res.status(statusCode.OK).json(msg);
+                return;
+            }
+        });
+    });
+
     app.post('/deploy-schedule', bodyParser.json(), (req, res) => {
         console.log("POST deploy-schedule received : ", req.body)
 
