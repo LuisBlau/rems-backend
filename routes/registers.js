@@ -39,7 +39,7 @@ module.exports = function (app, connection, log) {
 	res.send(sender.sendMessages(req.body));
   })
   let snmpDatabase = azureClient.db("pas_software_distribution").collection("config-files");
-  snmpDatabase.insertOne(toInsert, function (err, res) {
+  snmpDatabase.insertOne(req.body, function (err, res) {
     if (err) {
         const msg = { "error": err }
         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
