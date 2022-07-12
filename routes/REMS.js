@@ -271,7 +271,6 @@ module.exports = function (app, connection, log) {
         })
     })
 
-
     app.get('/REMS/deploys', (req, res) => { //TODO: refactor to a POST request
         var results = []
         let filters = {}
@@ -806,5 +805,21 @@ module.exports = function (app, connection, log) {
             }
         });
     });
-
+	app.get("/REMS/stores", (req,res) => {
+		agents.find({"retailer_id": req.cookies["retailerId"]}).toArray(function (err, rems) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!rems) {
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+                output = []
+				for(x of rems)
+					output.push(x.storeName)
+                res.status(statusCode.OK).json(output);
+            }
+        });
+	});
 }

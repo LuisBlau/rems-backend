@@ -32,7 +32,20 @@ function formatClauses(req) {
 }
 
 module.exports = function (app, connection, log) {
-
+  app.post('/sendSNMPRequest', bodyParser.json(), (req, res) => {
+    console.log("New SNMP Request set");
+    console.log(JSON.stringify(req.body))
+	const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+	res.send(sender.sendMessages(req.body));
+  })
+  let snmpDatabase = azureClient.db("pas_software_distribution").collection("config-files");
+  snmpDatabase.insertOne(toInsert, function (err, res) {
+    if (err) {
+        const msg = { "error": err }
+        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+        throw err;
+    }
+  });
   app.get('/registers/:storenum-:regnum', (req, res) => {
     connection.query(sqlString.format('SELECT * FROM Registers ' +
       'INNER JOIN Properties ON Registers.property_id = Properties.property_id ' +
