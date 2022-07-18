@@ -209,6 +209,7 @@ module.exports = function (app, connection, log) {
 
     });
 
+
     app.get('/REMS/uploads', (req, res) => {
         var results = []
         var uploads = azureClient.db("pas_software_distribution").collection("uploads");
@@ -494,6 +495,37 @@ module.exports = function (app, connection, log) {
         }) // config lookup from database
     });
 
+    app.get('/REMS/heartbeat', (req, res) => {
+        console.log("Get /REMS/heartbeat received : ", req.query)
+        var results = []
+        let filters = {}
+
+        if (req.query.Store !== undefined ) {
+            console.log("Heartbeat search with store "+req.query.Store)
+            filters.storeName=req.query.Store;
+        }
+        if (req.query.System !== undefined ) {
+            console.log("Heartbeat search with System/agent "+req.query.System)
+            filters.systemName=req.query.System;
+        }
+
+        const heartbeat = azureClient.db("pas_availability").collection("heartbeat");
+        heartbeat.find({ Retailer: req.cookies["retailerId"], ...filters }).toArray(function (err, result) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!result) {
+                const msg = { "message": "Heartbeat: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            } else {
+                results = result;
+                console.log(results);
+                res.send(results)
+            }
+        })
+    });
+
     app.get('/REMS/rems', (req, res) => {
         console.log("Get /REMS/rems received : ", req.query)
         var results = [];
@@ -522,6 +554,7 @@ module.exports = function (app, connection, log) {
         var results = [];
         let filters = {}
 
+        if (req.query.agentName) filters.agentName = req.query.agentName;
         if (req.query.onlyMasters == 'true') {
             console.log("onlyMasters : ", req.query.onlyMasters)
             filters.is_master = true
@@ -531,7 +564,29 @@ module.exports = function (app, connection, log) {
             console.log("Agent search with store "+req.query.store)
             filters.storeName=req.query.store;
         }
-        const agents = azureClient.db("pas_software_distribution").collection("agents");
+            /*
+    console.log("agentScreenShot "+JSON.stringify(filters));
+    console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"], ...filters}));
+    // console.log(filters);
+
+    var deploys = azureClient.db("pas_software_distribution").collection("agent-screenshot");
+    
+    deploys.find({ retailer_id: req.cookies["retailerId"], ...filters}).toArray(function (err, result) {
+        
+        if (err) {
+            const msg = { "error": err }
+            res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+            res.send();
+        } else if (!result) {
+            const msg = { "message": "No store available for this retailer" }
+            res.status(statusCode.NO_CONTENT).json(msg);
+            res.send();
+        }else {
+            console.log(result);
+            res.send(result[0])
+        }
+        */
+        var agents = azureClient.db("pas_software_distribution").collection("agents");
         agents.find({ retailer_id: req.cookies["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
             if (err) {
                 const msg = { "error": err }
@@ -544,6 +599,7 @@ module.exports = function (app, connection, log) {
             else {
                 console.log("sending agentList : ", agentList)
                 res.status(statusCode.OK).json(agentList);
+                //res.send(agentList[0])
             }
         });
     });
