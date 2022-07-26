@@ -11,6 +11,8 @@ const statusCode = require('http-status-codes').StatusCodes
 const mongodb = require("mongodb")
 const { BlobServiceClient } = require('@azure/storage-blob');
 const { v1: uuidv1} = require('uuid');
+const extract = require('extract-zip')
+const glob = require('glob');
 require('dotenv').config()
 
 // setup dirs
@@ -154,18 +156,32 @@ module.exports = function (app, connection, log) {
     app.post("/REMS/uploadfile", (req, res) => {
         console.log("request received")
         const retailerId = req.cookies["retailerId"]
+        const allowedExtensions = [".zip", ".upload"];
         var form = new multiparty.Form();
         var filename;
         res.writeHead(200, { 'content-type': 'text/plain' });
         res.write('received upload:\n\n');
+        var currentdate = new Date();
+
+        var targetDirectory = uploadDir + "/" + currentdate.getTime();
+
         form.parse(req, function (err, fields, files) {
             if (!fs.existsSync(uploadDir)) {
                 fs.mkdirSync(uploadDir);
             }
+            
             filename = files["file"][0].originalFilename;
+            const fileExtension = path.extname(filename);
+            var source = uploadDir + "/" + filename;
+
+            if (!fs.existsSync(targetDirectory)) {
+                fs.mkdirSync(targetDirectory);
+            }
+
             //query biggest index
             var uploads = azureClient.db("pas_software_distribution").collection("uploads");
             var results = [];
+            const versionPackages = [];
             uploads.find({ retailer_id: retailerId }).sort({ id: -1 }).limit(1).toArray(function (err, result) {
                 results = result;
                 var index = 0;
@@ -175,7 +191,6 @@ module.exports = function (app, connection, log) {
                 }
                 index++;
                 console.log("New index " + index);
-                var currentdate = new Date();
                 var datetime = currentdate.getFullYear() + "-"
                     + ((currentdate.getMonth() + 1 < 10) ? "0" : "") + (currentdate.getMonth() + 1) + "-"
                     + ((currentdate.getDate() < 10) ? "0" : "") + currentdate.getDate() + " "
@@ -186,14 +201,42 @@ module.exports = function (app, connection, log) {
 
                 let newFileName = uploadDir + "/" + index.toString() + ".upload"
 
-                fs.copyFile(files["file"][0].path, newFileName, (err) => {
-                    if (err) throw err;
-                });
+                fs.copyFileSync(files["file"][0].path, newFileName);
+
+                if(allowedExtensions.includes(fileExtension)) {
+                    //extractZip(newFileName, targetDirectory);
+                    try {
+                        extract(newFileName, { dir: targetDirectory })
+                        console.log('Extraction complete')
+                    } catch (err) {
+                          console.log(err.message);
+                    }
+
+                    let fileNamePattern = /^ADXC.*T{1}.*D{1}.DAT$/;
+                    extractfiles = fs.readdirSync(uploadDir+"/1658460166336/");
+
+                    extractfiles.forEach(extractFile => {
+                        if(path.extname(extractFile) == ".DAT" && fileNamePattern.test(extractFile)) {
+                            console.log(extractFile)
+                            const syncData = fs.readFileSync(uploadDir+"/1658460166336/" + extractFile, {encoding:'utf8', flag:'r'});
+                            if(syncData.length > 100) {
+                                let productName = syncData.substring(27, 57);
+                                let cdNum =  syncData.substring(88, 92);
+                                let productRelease = syncData.substring(92, 95);
+    
+                                const package = { productName : productName, version : cdNum+"-"+productRelease };
+                                versionPackages.push(package);
+                            }
+                        }
+                    })
+
+                    console.log(versionPackages);
+                }
                 
                 let azureFileName = retailerId + "-" + index.toString() + ".upload"
                 fileUploadToAzure(files["file"][0], azureFileName).then(() => {
                         console.log('Done');
-                        var newFile = { id: index, retailer_id: retailerId, filename: filename, inserted: currentdate.getTime(), timestamp: datetime, archived: "false", description: fields["description"][0] };
+                        var newFile = { id: index, retailer_id: retailerId, filename: filename, inserted: currentdate.getTime(), timestamp: datetime, archived: "false", description: fields["description"][0], packages : versionPackages };
                             uploads.insertOne(newFile, function (err, res) {
                                 if (err) throw err;
                         });
