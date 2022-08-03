@@ -206,7 +206,7 @@ module.exports = function (app, connection, log) {
                 if(allowedExtensions.includes(fileExtension)) {
                     //extractZip(newFileName, targetDirectory);
                     try {
-                        extract(newFileName, { dir: targetDirectory })
+                        await extract(newFileName, { dir: targetDirectory })
                         console.log('Extraction complete')
                     } catch (err) {
                           console.log(err.message);
