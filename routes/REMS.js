@@ -79,6 +79,16 @@ async function lookupAgents(stores, retailer_id) {
     }
 }
 
+async function extractZip(newFileName, targetDirectory) {
+    try {
+        await extract(newFileName, { dir: targetDirectory })
+        console.log('Extraction complete')
+   } catch (err) {
+         console.log(err.message);
+   }
+}
+
+
 async function fileUploadToAzure(srcFile, azureFileName) {
     console.log("Inside method of fileUploadToAzure");
 
@@ -204,13 +214,7 @@ module.exports = function (app, connection, log) {
                 fs.copyFileSync(files["file"][0].path, newFileName);
 
                 if(allowedExtensions.includes(fileExtension)) {
-                    //extractZip(newFileName, targetDirectory);
-                    try {
-                        await extract(newFileName, { dir: targetDirectory })
-                        console.log('Extraction complete')
-                    } catch (err) {
-                          console.log(err.message);
-                    }
+                    extractZip(newFileName, targetDirectory);
 
                     let fileNamePattern = /^ADXC.*T{1}.*D{1}.DAT$/;
                     extractfiles = fs.readdirSync(uploadDir+"/1658460166336/");
