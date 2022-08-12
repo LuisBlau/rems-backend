@@ -37,14 +37,14 @@ module.exports = function (app, connection, log) {
     console.log(JSON.stringify(req.body))
 	const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 	res.send(sender.sendMessages({"body": req.body}));
-    let snmpDatabase = azureClient.db("pas_software_distribution").collection("config-files");
-    snmpDatabase.insertOne(req.body, function (err, res) {
-    if (err) {
-        const msg = { "error": err }
-        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-        throw err;
-    }
-  });
+    //let snmpDatabase = azureClient.db("pas_software_distribution").collection("config-files");
+    //snmpDatabase.insertOne(req.body, function (err, res) {
+    //if (err) {
+    //    const msg = { "error": err }
+    //    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+    //    throw err;
+    //}
+  //});
   })
   
   app.get('/registers/:storenum-:regnum', (req, res) => {
