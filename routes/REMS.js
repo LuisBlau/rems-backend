@@ -91,7 +91,7 @@ async function extractZip(newFileName, targetDirectory) {
 
 async function fileUploadToAzure(srcFile, azureFileName) {
     console.log("Inside method of fileUploadToAzure");
-
+    
     const AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=pasfileuploads;AccountKey=6Wh7jcTvZYyAGyiyq7nZWcbZHZyNPDnrVLY6OgeDv3CmhRHDBdzWc8dAAgigrEZkxYFyQR2UJ6AO+ASt/Q2DQg==;EndpointSuffix=core.windows.net";
 
     if (!AZURE_STORAGE_CONNECTION_STRING) {
@@ -123,9 +123,9 @@ async function fileUploadToAzure(srcFile, azureFileName) {
                 fileSize = stats.size;
             }
         });
-        
+
         // Upload data to the blob
-        const uploadBlobResponse = await blockBlobClient.upload(srcFile.path, fileSize);
+        const uploadBlobResponse = await blockBlobClient.uploadFile(srcFile.path)
         console.log( "Blob was uploaded successfully. requestId: ", uploadBlobResponse.requestId );
 
     }catch (error) {
