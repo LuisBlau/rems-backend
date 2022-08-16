@@ -16,7 +16,7 @@ const glob = require('glob');
 require('dotenv').config()
 
 // setup dirs
-var uploadDir = process.env.REMS_HOME + "/uploads";
+var uploadDir = "./uploads";
 
 /* cSpell:disable */
 //setup azure connections
