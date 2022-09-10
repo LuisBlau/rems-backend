@@ -925,4 +925,26 @@ module.exports = function (app, connection, log) {
             }
         });
 	});
+
+    app.get('/REMS/getRoleDetails', (req, res) => {
+        console.log(req.query.email);
+        var results = {}
+        var userRoles = azureClient.db("pas_config").collection("user");
+        userRoles.find({ email: req.query.email }).limit(1).toArray(function (err, result) {
+
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            }
+
+            if(result.length > 0) {
+                results = result[0];
+                console.log(result[0])
+            }
+
+            res.send(results)
+        });
+    });
+
 }
