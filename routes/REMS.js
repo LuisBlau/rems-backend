@@ -679,7 +679,7 @@ module.exports = function (app, connection, log) {
         const id = request.body.id;
         const newStatus = "Cancel";
 
-        const deployQuery = { retailer_id: req.cookies["retailerId"], storeName: storeName, id: parseInt(id), status: { $in: ["initial", "Initial", "Pending", "pending"] } };
+        const deployQuery = { retailer_id: request.cookies["retailerId"], storeName: storeName, id: parseInt(id), status: { $in: ["initial", "Initial", "Pending", "pending"] } };
         const deployUpdate = { $set: { status: newStatus } }
 
         const deploys = azureClient.db("pas_software_distribution").collection("deployments")
