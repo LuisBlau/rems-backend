@@ -212,17 +212,17 @@ module.exports = function (app, connection, log) {
                 let newFileName = uploadDir + "/" + index.toString() + ".upload"
 
                 fs.copyFileSync(files["file"][0].path, newFileName);
-
+                /*
                 if(allowedExtensions.includes(fileExtension)) {
                     extractZip(newFileName, targetDirectory);
 
                     let fileNamePattern = /^ADXC.*T{1}.*D{1}.DAT$/;
-                    extractfiles = fs.readdirSync(uploadDir+"/1658460166336/");
+                    extractfiles = fs.readdirSync(targetDirectory);
 
                     extractfiles.forEach(extractFile => {
                         if(path.extname(extractFile) == ".DAT" && fileNamePattern.test(extractFile)) {
                             console.log(extractFile)
-                            const syncData = fs.readFileSync(uploadDir+"/1658460166336/" + extractFile, {encoding:'utf8', flag:'r'});
+                            const syncData = fs.readFileSync(targetDirectory + extractFile, {encoding:'utf8', flag:'r'});
                             if(syncData.length > 100) {
                                 let productName = syncData.substring(27, 57);
                                 let cdNum =  syncData.substring(88, 92);
@@ -236,7 +236,8 @@ module.exports = function (app, connection, log) {
 
                     console.log(versionPackages);
                 }
-                
+                */
+
                 let azureFileName = retailerId + "-" + index.toString() + ".upload"
                 fileUploadToAzure(files["file"][0], azureFileName).then(() => {
                         console.log('Done');
@@ -305,10 +306,10 @@ module.exports = function (app, connection, log) {
                 })
             }
             console.log(JSON.stringify(toInsert));
-            deployConfig.updateOne({"name": req.body.name},{"$set":toInsert},{upsert:true}, function (err, res) {
+            deployConfig.updateOne({"name": req.body.name, "retailer_id": retailerId},{"$set":toInsert},{upsert:true}, function (err, result) {
                 if (err) {
                     const msg = { "error": err }
-                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                    //res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                     throw err;
                 }
             });
