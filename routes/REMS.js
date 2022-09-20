@@ -16,7 +16,7 @@ const glob = require('glob');
 require('dotenv').config()
 
 // setup dirs
-var uploadDir = process.env.REMS_HOME + "/uploads";
+var uploadDir = "./uploads";
 
 /* cSpell:disable */
 //setup azure connections
@@ -212,17 +212,17 @@ module.exports = function (app, connection, log) {
                 let newFileName = uploadDir + "/" + index.toString() + ".upload"
 
                 fs.copyFileSync(files["file"][0].path, newFileName);
-
+                /*
                 if(allowedExtensions.includes(fileExtension)) {
                     extractZip(newFileName, targetDirectory);
 
                     let fileNamePattern = /^ADXC.*T{1}.*D{1}.DAT$/;
-                    extractfiles = fs.readdirSync(uploadDir+"/1658460166336/");
+                    extractfiles = fs.readdirSync(targetDirectory);
 
                     extractfiles.forEach(extractFile => {
                         if(path.extname(extractFile) == ".DAT" && fileNamePattern.test(extractFile)) {
                             console.log(extractFile)
-                            const syncData = fs.readFileSync(uploadDir+"/1658460166336/" + extractFile, {encoding:'utf8', flag:'r'});
+                            const syncData = fs.readFileSync(targetDirectory + extractFile, {encoding:'utf8', flag:'r'});
                             if(syncData.length > 100) {
                                 let productName = syncData.substring(27, 57);
                                 let cdNum =  syncData.substring(88, 92);
@@ -236,7 +236,8 @@ module.exports = function (app, connection, log) {
 
                     console.log(versionPackages);
                 }
-                
+                */
+
                 let azureFileName = retailerId + "-" + index.toString() + ".upload"
                 fileUploadToAzure(files["file"][0], azureFileName).then(() => {
                         console.log('Done');
@@ -305,10 +306,10 @@ module.exports = function (app, connection, log) {
                 })
             }
             console.log(JSON.stringify(toInsert));
-            deployConfig.updateOne({"name": req.body.name},{"$set":toInsert},{upsert:true}, function (err, res) {
+            deployConfig.updateOne({"name": req.body.name, "retailer_id": retailerId},{"$set":toInsert},{upsert:true}, function (err, result) {
                 if (err) {
                     const msg = { "error": err }
-                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                    //res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                     throw err;
                 }
             });
@@ -596,57 +597,35 @@ module.exports = function (app, connection, log) {
     });
 
     app.get('/REMS/agents', (req, res) => {
-        console.log("Get /REMS/agents received : ", req.query)
-		console.log(req.cookies["retailerId"])
+        console.log("Get /REMS/agents received : ", req.query);
+		console.log(req.cookies["retailerId"]);
         var results = [];
-        let filters = {}
+        let filters = {};
 
         if (req.query.agentName) filters.agentName = req.query.agentName;
         if (req.query.onlyMasters == 'true') {
-            console.log("onlyMasters : ", req.query.onlyMasters)
-            filters.is_master = true
+            console.log("onlyMasters : ", req.query.onlyMasters);
+            filters.is_master = true;
         }
 
         if (req.query.store !== undefined ) {
-            console.log("Agent search with store "+req.query.store)
+            console.log("Agent search with store "+req.query.store);
             filters.storeName=req.query.store;
         }
-            /*
-    console.log("agentScreenShot "+JSON.stringify(filters));
-    console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"], ...filters}));
-    // console.log(filters);
 
-    var deploys = azureClient.db("pas_software_distribution").collection("agent-screenshot");
-    
-    deploys.find({ retailer_id: req.cookies["retailerId"], ...filters}).toArray(function (err, result) {
-        
-        if (err) {
-            const msg = { "error": err }
-            res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-            res.send();
-        } else if (!result) {
-            const msg = { "message": "No store available for this retailer" }
-            res.status(statusCode.NO_CONTENT).json(msg);
-            res.send();
-        }else {
-            console.log(result);
-            res.send(result[0])
-        }
-        */
         var agents = azureClient.db("pas_software_distribution").collection("agents");
         agents.find({ retailer_id: req.cookies["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
             if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
+                const msg = { "error": err };
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                throw err;
             } else if (!agentList) {
-                const msg = { "message": "Agents: Error reading from server" }
+                const msg = { "message": "Agents: Error reading from server" };
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending agentList : ", agentList)
+                console.log("sending agentList : ", agentList);
                 res.status(statusCode.OK).json(agentList);
-                //res.send(agentList[0])
             }
         });
     });
@@ -679,7 +658,7 @@ module.exports = function (app, connection, log) {
         const id = request.body.id;
         const newStatus = "Cancel";
 
-        const deployQuery = { retailer_id: req.cookies["retailerId"], storeName: storeName, id: parseInt(id), status: { $in: ["initial", "Initial", "Pending", "pending"] } };
+        const deployQuery = { retailer_id: request.cookies["retailerId"], storeName: storeName, id: parseInt(id), status: { $in: ["initial", "Initial", "Pending", "pending"] } };
         const deployUpdate = { $set: { status: newStatus } }
 
         const deploys = azureClient.db("pas_software_distribution").collection("deployments")
@@ -925,4 +904,26 @@ module.exports = function (app, connection, log) {
             }
         });
 	});
+
+    app.get('/REMS/getRoleDetails', (req, res) => {
+        console.log(req.query.email);
+        var results = {}
+        var userRoles = azureClient.db("pas_config").collection("user");
+        userRoles.find({ email: req.query.email }).limit(1).toArray(function (err, result) {
+
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            }
+
+            if(result.length > 0) {
+                results = result[0];
+                console.log(result[0])
+            }
+
+            res.send(results)
+        });
+    });
+
 }

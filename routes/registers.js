@@ -1,22 +1,15 @@
 const sqlString = require('sqlstring')
 const atob = require("atob")
 const btoa = require("btoa")
-const fs = require('fs');
-const readline = require('readline');
 var bodyParser = require('body-parser');
 const mongodb = require("mongodb")
 
 const { ServiceBusClient } = require("@azure/service-bus");
-const { Console } = require('console');
 const sbClient = new ServiceBusClient("Endpoint=sb://remscomm.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=Dk+TDFecPYBkRKtCqqudv1dnrN2hR5bcEN1t1alztOI=");
 var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
 
 function formatCount(resp) {
-  // return Object.assign({}, resp.map((x) => ({
-  //   "name" : x["property_value"],
-  //   "value": x["count(property_value)"]
-  // })))
   count_dict = []
   return resp.map( element => (({
     "name": element["property_value"],
@@ -37,14 +30,28 @@ module.exports = function (app, connection, log) {
     console.log(JSON.stringify(req.body))
 	const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 	res.send(sender.sendMessages({"body": req.body}));
-    //let snmpDatabase = azureClient.db("pas_software_distribution").collection("config-files");
-    //snmpDatabase.insertOne(req.body, function (err, res) {
-    //if (err) {
-    //    const msg = { "error": err }
-    //    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-    //    throw err;
-    //}
-  //});
+  })
+
+  app.get('/getSNMPConfig', (req, res) => {
+    let snmpDatabase = azureClient.db("pas_software_distribution").collection("config-files");
+    if (req.query["sName"] != undefined && req.query["aName"] != undefined) {
+      snmpDatabase.findOne({
+        storeName: req.query["sName"],
+        agentName: req.query["aName"]
+      }, function(err, result) {
+        if (err || result === null) {
+          log.info(`GET store: ${req.query["sName"]} and agent: ${req.query["aName"]}`);
+          if (err) {
+            log.error(err);
+          }
+          res.send(err);
+        } else {
+          log.info(`GET ${req.query}`);
+          console.log(result.values);
+          res.send(result.values);
+        }
+      });
+    }
   })
   
   app.get('/registers/:storenum-:regnum', (req, res) => {
@@ -138,46 +145,10 @@ module.exports = function (app, connection, log) {
       })
   })
   app.get('/registers/extracts', (req, res) => {
-/* 	var results = [{ 
-   "Retailer": "T0BGBBL",
-   "RegNum": "44",
-   "Store": "US0303",
-   "Timestamp": "2021/11/11 16:00:00",
-   "values": {
-     "File":"SCS_Extract_Lane_S303_L044_RMA Default Policy_20211028_164049_CST.zip",
-      "InstalledPath":"/cdrive/ext/signed/chec/IBMSelfCheckout",
-      "ExtractType":"Extract",
-	  "State":"Ohio"
-   },
-   "location": {
-      "Store":"true",
-      "Azure":"false",
-      "AzureUrl":""
-   }
-},
-{ 
-   "Retailer": "T0BGBBL",
-   "RegNum": "45",
-   "Store": "US0303",
-   "Timestamp": "2021/11/11 16:00:00",
-   "values": {
-     "File":"SCS_Extract_Lane_S303_L044_RMA Default Policy_20211028_164049_CST.zip",
-      "InstalledPath":"/cdrive/ext/signed/chec/IBMSelfCheckout",
-      "ExtractType":"Extract",
-	  "State":"Ohio"
-   },
-   "location": {
-      "Store":"true",
-      "Azure":"false",
-      "AzureUrl":""
-   }
-}
-] */
    var results = []
    var snapshots = azureClient.db("pas_reloads").collection("extracts");
    snapshots.find().toArray(function(err, result){
      results = result;
-     console.log(result)
 	let modifiedResults = []
 	for (var x of results) {
 		var y = x
@@ -194,46 +165,10 @@ module.exports = function (app, connection, log) {
   });
 
 app.get('/registers/extracts', (req, res) => {
-/* 	var results = [{ 
-   "Retailer": "T0BGBBL",
-   "RegNum": "44",
-   "Store": "US0303",
-   "Timestamp": "2021/11/11 16:00:00",
-   "values": {
-     "File":"SCS_Extract_Lane_S303_L044_RMA Default Policy_20211028_164049_CST.zip",
-      "InstalledPath":"/cdrive/ext/signed/chec/IBMSelfCheckout",
-      "ExtractType":"Extract",
-	  "State":"Ohio"
-   },
-   "location": {
-      "Store":"true",
-      "Azure":"false",
-      "AzureUrl":""
-   }
-},
-{ 
-   "Retailer": "T0BGBBL",
-   "RegNum": "45",
-   "Store": "US0303",
-   "Timestamp": "2021/11/11 16:00:00",
-   "values": {
-     "File":"SCS_Extract_Lane_S303_L044_RMA Default Policy_20211028_164049_CST.zip",
-      "InstalledPath":"/cdrive/ext/signed/chec/IBMSelfCheckout",
-      "ExtractType":"Extract",
-	  "State":"Ohio"
-   },
-   "location": {
-      "Store":"true",
-      "Azure":"false",
-      "AzureUrl":""
-   }
-}
-] */
    var results = []
    var snapshots = azureClient.db("pas_reloads").collection("extracts");
    snapshots.find().toArray(function(err, result){
      results = result;
-     console.log(result)
 	let modifiedResults = []
 	for (var x of results) {
 		var y = x
@@ -253,7 +188,6 @@ app.get('/registers/dumps', (req, res) => {
    var snapshots = azureClient.db("pas_reloads").collection("dumps");
    snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
      results = result;
-     console.log(result)
 	let modifiedResults = []
 	for (var x of results) {
 		var y = x
@@ -286,18 +220,12 @@ app.get('/registers/dumps', (req, res) => {
 		  "filename":j.values.File
 		}
 	  };
-	  console.log("Sending: "+msgSent);
     const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 	res.send(sender.sendMessages(msgSent));
   })
   
 
   app.post("/registers/requestDump/",bodyParser.json(),  (req,res) => {
-    console.log("requestDump")
-  
-	  console.log(req.body)
-    console.log(JSON.stringify(req.body))
-    //console.log(req)
 	  msgSent = {"body": {
 		  "retailer":req.body["retailer_id"],
 		  "store":req.body["store_name"], 
@@ -305,7 +233,6 @@ app.get('/registers/dumps', (req, res) => {
 		  "dataCapture":req.body["dataCapture"]
 		}
 	  };
-	  console.log("Sending: "+msgSent);
     const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 	res.send(sender.sendMessages(msgSent));
   })
@@ -316,7 +243,6 @@ app.get('/registers/captures', (req, res) => {
 
   snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
     results = result;
-    console.log(result)
  let modifiedResults = []
  for (var x of results) {
    var y = x
@@ -342,7 +268,6 @@ app.get('/registers/captures/:string', (req, res) => {
     "filename":j.values.File
   }
   };
-  console.log("Sending: "+JSON.stringify(msgSent));
   const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 res.send(sender.sendMessages(msgSent));
 });
@@ -356,7 +281,6 @@ app.get('/registers/commands/:string', (req, res) => {
     "command":j.Command
   }
   };
-  console.log("Sending: "+JSON.stringify(msgSent));
   const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 res.send(sender.sendMessages(msgSent));
 });
