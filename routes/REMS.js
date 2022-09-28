@@ -89,9 +89,7 @@ async function extractZip(newFileName, targetDirectory) {
 }
 
 
-async function fileUploadToAzure(srcFile, azureFileName) {
-    console.log("Inside method of fileUploadToAzure");
-    
+async function fileUploadToAzure(srcFile, azureFileName) {    
     const AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=pasfileuploads;AccountKey=6Wh7jcTvZYyAGyiyq7nZWcbZHZyNPDnrVLY6OgeDv3CmhRHDBdzWc8dAAgigrEZkxYFyQR2UJ6AO+ASt/Q2DQg==;EndpointSuffix=core.windows.net";
 
     if (!AZURE_STORAGE_CONNECTION_STRING) {
@@ -104,22 +102,18 @@ async function fileUploadToAzure(srcFile, azureFileName) {
             
             // Create a unique name for the container
         const containerName = "rems-upload";
-        console.log("\t", containerName);
         
         // Get a reference to a container
         const containerClient = blobServiceClient.getContainerClient(containerName);
         
         // Get a block blob client
         const blockBlobClient = containerClient.getBlockBlobClient(azureFileName);
-        
-        console.log("\nUploading to Azure storage as blob:\n\t", azureFileName);
-        
+                
         let fileSize = 0;
         await fs.stat(srcFile.path, (err, stats) => {
             if (err) {
                 console.log(`File doesn't exist.`);
             } else {
-                console.log(stats);
                 fileSize = stats.size;
             }
         });
@@ -164,7 +158,6 @@ module.exports = function (app, connection, log) {
     })
 
     app.post("/REMS/uploadfile", (req, res) => {
-        console.log("request received")
         const retailerId = req.cookies["retailerId"]
         const allowedExtensions = [".zip", ".upload"];
         var form = new multiparty.Form();
@@ -200,7 +193,6 @@ module.exports = function (app, connection, log) {
                     index = results[0].id;
                 }
                 index++;
-                console.log("New index " + index);
                 var datetime = currentdate.getFullYear() + "-"
                     + ((currentdate.getMonth() + 1 < 10) ? "0" : "") + (currentdate.getMonth() + 1) + "-"
                     + ((currentdate.getDate() < 10) ? "0" : "") + currentdate.getDate() + " "
@@ -240,7 +232,6 @@ module.exports = function (app, connection, log) {
 
                 let azureFileName = retailerId + "-" + index.toString() + ".upload"
                 fileUploadToAzure(files["file"][0], azureFileName).then(() => {
-                        console.log('Done');
                         var newFile = { id: index, retailer_id: retailerId, filename: filename, inserted: currentdate.getTime(), timestamp: datetime, archived: "false", description: fields["description"][0], packages : versionPackages };
                             uploads.insertOne(newFile, function (err, res) {
                                 if (err) throw err;
@@ -263,15 +254,12 @@ module.exports = function (app, connection, log) {
         var uploads = azureClient.db("pas_software_distribution").collection("uploads");
         uploads.find({ retailer_id: req.cookies["retailerId"] }).toArray(function (err, result) {
             results = result;
-            console.log(result)
 
             res.send(results)
         });
     });
 
     app.post('/sendCommand', bodyParser.json(), (req, res) => {
-        console.log("New command set");
-        console.log(JSON.stringify(req.body))
         const retailerId = req.cookies["retailerId"]
         //query biggest index
         var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
@@ -299,13 +287,11 @@ module.exports = function (app, connection, log) {
             }
 
             for (var i = 0; i < req.body.steps.length; i++) {
-                console.log("Step " + i + " type=" + req.body.steps[i].type)
                 toInsert.steps.push({
                     type: req.body.steps[i].type,
                     ...req.body.steps[i].arguments
                 })
             }
-            console.log(JSON.stringify(toInsert));
             deployConfig.updateOne({"name": req.body.name, "retailer_id": retailerId},{"$set":toInsert},{upsert:true}, function (err, result) {
                 if (err) {
                     const msg = { "error": err }
@@ -314,7 +300,6 @@ module.exports = function (app, connection, log) {
                 }
             });
 
-                console.log("Inserted");
                 const msg = { "message": "Success" }
                 res.status(statusCode.OK).json(msg);
         })
@@ -328,16 +313,10 @@ module.exports = function (app, connection, log) {
         if (req.query.package && parseInt(req.query.package) > 0) filters.config_id = parseInt(req.query.package)
         if (req.query.records) maxRecords = parseInt(req.query.records);
         if (req.query.status && "All" !== req.query.status) filters.status = req.query.status;
-
-        // console.log("Filter")
-        // console.log(JSON.stringify({ retailer_id: retailerId, ...filters }));
-        // console.log(filters);
-
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
         deploys.find({ retailer_id: req.cookies["retailerId"], ...filters }).sort({ id: -1}).limit(maxRecords).toArray(function (err, result) {
             results = result;
-            // console.log(result)
             res.send(results)
         });
     });
@@ -347,7 +326,6 @@ module.exports = function (app, connection, log) {
 	});
 
     app.get('/REMS/deploy-configs', (req, res) => {
-        // console.log("GET deploy-configs request ")
         var results = [];
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
         configs.find({ retailer_id: req.cookies["retailerId"], name: { $ne: "Missing name" } }).toArray(function (err, result) {
@@ -396,7 +374,6 @@ module.exports = function (app, connection, log) {
                     
                     if (err) {
                         const msg = { "error": err }
-                        console.log(msg);
                     } else if (!result) {
                         console.log("No store available for this retailer");
                     }else {
@@ -497,11 +474,9 @@ module.exports = function (app, connection, log) {
                         }
                     })
 
-                    console.log(missingAgent);
 
                     lookupAgents(missingAgent,retailer_id).then(agents => {
                         var noAgent = "";
-                        console.log(agents);
                         if (agents) {
                             agents.map(agent => {
                                 if (agent.agentName) {
@@ -512,7 +487,6 @@ module.exports = function (app, connection, log) {
                                 }
                             })
                         }
-                        console.log(newRecords);
 
                         if (noAgent.length > 0) {
                             /* I wanted to send an error here, but we cannot add a message to an error response
@@ -568,7 +542,6 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             } else {
                 results = result;
-                console.log(results);
                 res.send(results)
             }
         })
@@ -598,7 +571,6 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/agents', (req, res) => {
         console.log("Get /REMS/agents received : ", req.query);
-		console.log(req.cookies["retailerId"]);
         var results = [];
         let filters = {};
 
@@ -724,7 +696,6 @@ module.exports = function (app, connection, log) {
                 res.send();
             }else {
                 results = result;
-                console.log(results);
                 res.send(results)
             }
 
@@ -739,7 +710,6 @@ module.exports = function (app, connection, log) {
         
         console.log("agentScreenShot "+JSON.stringify(filters));
         console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"], ...filters}));
-        // console.log(filters);
 
         var deploys = azureClient.db("pas_software_distribution").collection("agent-screenshot");
         
@@ -754,7 +724,6 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
                 res.send();
             }else {
-                console.log(result);
                 res.send(result[0])
             }
 
@@ -769,7 +738,6 @@ module.exports = function (app, connection, log) {
         if (req.query.storeId) filters.id = req.query.storeId;
 
         console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"], ...filters}));
-        // console.log(filters);
 
         var deploys = azureClient.db("pas_software_distribution").collection("store-list");
         
@@ -787,7 +755,6 @@ module.exports = function (app, connection, log) {
                 result.forEach(function(item) {
                     results = results.concat(item.agents);
                 });
-                console.log(results);
                 res.send(results)
             }
 
@@ -795,9 +762,6 @@ module.exports = function (app, connection, log) {
     });
 
     app.post('/REMS/save-store-data', bodyParser.json(), (req, res) => {
-        console.log("New command set");
-        console.log(JSON.stringify(req.body));
-
         let filters = {};
         if (req.body.id) filters.id = req.body.id;
 
@@ -823,10 +787,7 @@ module.exports = function (app, connection, log) {
                         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                         throw err;
                     }
-                });
-    
-                console.log("Updated");
-    
+                });    
 
             } else {
 
@@ -843,20 +804,14 @@ module.exports = function (app, connection, log) {
                     agents: []
                 }
     
-                toInsert.agents = toInsert.agents.concat(req.body.agents);
-                
-                console.log(JSON.stringify(toInsert));
-    
+                toInsert.agents = toInsert.agents.concat(req.body.agents);    
                 deployConfig.insertOne(toInsert, function (err, res) {
                     if (err) {
                         const msg = { "error": err }
                         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                         throw err;
                     }
-                });
-    
-                console.log("Inserted");
-    
+                });    
             }
 
             const msg = { "message": "Success" }
@@ -906,7 +861,6 @@ module.exports = function (app, connection, log) {
 	});
 
     app.get('/REMS/getRoleDetails', (req, res) => {
-        console.log(req.query.email);
         var results = {}
         var userRoles = azureClient.db("pas_config").collection("user");
         userRoles.find({ email: req.query.email }).limit(1).toArray(function (err, result) {
@@ -919,7 +873,45 @@ module.exports = function (app, connection, log) {
 
             if(result.length > 0) {
                 results = result[0];
-                console.log(result[0])
+            }
+
+            res.send(results)
+        });
+    });
+
+    app.get('/REMS/getUserDetails', (req, res) => {
+        var results = {}
+        var userDetails = azureClient.db("pas_config").collection("user");
+        userDetails.find({ email: req.query.email }).limit(1).toArray(function (err, result) {
+
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            }
+
+            if(result.length > 0) {
+                results = result[0];
+            }
+
+            res.send(results)
+        });
+    });
+
+    app.get('/REMS/getRetailerDetails', (req, res) => {
+        var results = {}
+        var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
+        retailerDetails.find({retailer_id: req.query.id}).limit(1).toArray(function (err, result) {
+            console.log(req.query.id)
+            console.log(result)
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            }
+
+            if(result.length > 0) {
+                results = result[0];
             }
 
             res.send(results)
