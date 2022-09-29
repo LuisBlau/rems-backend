@@ -145,9 +145,10 @@ module.exports = function (app, connection, log) {
       })
   })
   app.get('/registers/extracts', (req, res) => {
-   var results = []
+    console.log("Extracts - "+req.cookies["retailerId"])
+     var results = []
    var snapshots = azureClient.db("pas_reloads").collection("extracts");
-   snapshots.find().toArray(function(err, result){
+   snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
      results = result;
 	let modifiedResults = []
 	for (var x of results) {
@@ -158,6 +159,7 @@ module.exports = function (app, connection, log) {
 		y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
 		y["ExtractType"] = x["values"]["ExtractType"]
 		y["State"] = x["values"]["State"]
+    y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
 		modifiedResults.push(y)
 	}
 	res.send(modifiedResults)
@@ -165,9 +167,10 @@ module.exports = function (app, connection, log) {
   });
 
 app.get('/registers/extracts', (req, res) => {
+  console.log("Extracts - "+req.cookies["retailerId"])
    var results = []
    var snapshots = azureClient.db("pas_reloads").collection("extracts");
-   snapshots.find().toArray(function(err, result){
+   snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
      results = result;
 	let modifiedResults = []
 	for (var x of results) {
@@ -178,6 +181,7 @@ app.get('/registers/extracts', (req, res) => {
 		y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
 		y["ExtractType"] = x["values"]["ExtractType"]
 		y["State"] = x["values"]["State"]
+    y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
 		modifiedResults.push(y)
 	}
 	res.send(modifiedResults)
@@ -204,7 +208,7 @@ app.get('/registers/dumps', (req, res) => {
 		y["ExtractType"] = x["values"]["ExtractType"]
 		y["State"] = x["values"]["State"]
 		y["Rids"] = x["values"]["rids"]
-    
+
     modifiedResults.push(y)
 	}
 	res.send(modifiedResults)
