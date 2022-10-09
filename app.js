@@ -56,7 +56,7 @@ const httpsOptions = {
 };
 
 // for development
-if ( process.env.RMA_DEV == "true") {
+if ( process.env.RMA_DEV == "true" && process.env.NODE_ENV !== 'test') {
     console.log("It's a dev box")
     port=3002
     httpPort=3001
