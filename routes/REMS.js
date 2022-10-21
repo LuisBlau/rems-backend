@@ -677,14 +677,22 @@ module.exports = function (app, connection, log) {
         });
     });
 
-    app.get('/REMS/store-list', (req, res) => {
+    app.get('/REMS/store-list', async (req, res) => {
         var results = []
 
         console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"]}));
 
         var storeList = azureClient.db("pas_software_distribution").collection("store-list");
-        
-        storeList.find({ retailer_id: req.cookies["retailerId"]}).toArray(function (err, result) {
+        filters =  {retailer_id: req.cookies["retailerId"]}
+		if(req.query["version"]) {
+			var version_split = req.query["version"].split("\n")
+			var sw = version_split[0]
+			var version = version_split[1]
+			var agents = await azureClient.db("pas_software_distribution").collection("agents").find({"version":{"$elemMatch": { sw: version } }}).toArray()
+			console.log(agents)
+			filters["agents"] = {"$in":agents}
+		}
+        storeList.find(filters).toArray(function (err, result) {
             
             if (err) {
                 const msg = { "error": err }

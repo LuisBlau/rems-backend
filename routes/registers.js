@@ -94,6 +94,18 @@ module.exports = function (app, connection, log) {
         }
       })
   })
+  
+  app.get("/registers/versions", async (req,res) => {
+	  let versions = {}
+	  let docs = await azureClient.db("pas_software_distribution").collection("agents").distinct("versions",{"retailer_id":req.cookies["retailerId"]})
+    for(var y of docs) { 
+      if(!versions[Object.keys(y)[0]]) versions[Object.keys(y)[0]] = []
+      if(versions[Object.keys(y)[0]].indexOf(y[Object.keys(y)[0]]) == -1) {
+        versions[Object.keys(y)[0]].push(y[Object.keys(y)[0]])
+      }
+	  }
+	  res.send(versions)
+  })
 
   app.get('/registers/pinpad', (req, res) => {
     connection.query('SELECT property_value, count(property_value) ' +
