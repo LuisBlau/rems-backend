@@ -16,7 +16,7 @@ const glob = require('glob');
 require('dotenv').config()
 
 // setup dirs
-var uploadDir = "./uploads";
+var uploadDir = process.cwd() + "/uploads";
 
 /* cSpell:disable */
 //setup azure connections
@@ -79,10 +79,9 @@ async function lookupAgents(stores, retailer_id) {
     }
 }
 
-async function extractZip(newFileName, targetDirectory) {
+async function extractZip(copyDestination, targetDirectory) {
     try {
-        await extract(newFileName, { dir: targetDirectory })
-        console.log('Extraction complete')
+        await extract(copyDestination, { dir: targetDirectory })
    } catch (err) {
          console.log(err.message);
    }
@@ -91,10 +90,6 @@ async function extractZip(newFileName, targetDirectory) {
 
 async function fileUploadToAzure(srcFile, azureFileName) {    
     const AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=pasfileuploads;AccountKey=6Wh7jcTvZYyAGyiyq7nZWcbZHZyNPDnrVLY6OgeDv3CmhRHDBdzWc8dAAgigrEZkxYFyQR2UJ6AO+ASt/Q2DQg==;EndpointSuffix=core.windows.net";
-
-    if (!AZURE_STORAGE_CONNECTION_STRING) {
-        throw Error("Azure Storage Connection string not found");
-    }
 
     try {
 
@@ -110,7 +105,7 @@ async function fileUploadToAzure(srcFile, azureFileName) {
         const blockBlobClient = containerClient.getBlockBlobClient(azureFileName);
                 
         let fileSize = 0;
-        await fs.stat(srcFile.path, (err, stats) => {
+        fs.stat(srcFile.path, (err, stats) => {
             if (err) {
                 console.log(`File doesn't exist.`);
             } else {
@@ -119,8 +114,9 @@ async function fileUploadToAzure(srcFile, azureFileName) {
         });
 
         // Upload data to the blob
-        const uploadBlobResponse = await blockBlobClient.uploadFile(srcFile.path)
-        console.log( "Blob was uploaded successfully. requestId: ", uploadBlobResponse.requestId );
+        var uploadBlobResponse = await blockBlobClient.uploadFile(srcFile.path)
+        console.log( (fileSize / 1048576).toFixed(2) + "mb blob was uploaded successfully. requestId: ", uploadBlobResponse.requestId );
+        return uploadBlobResponse
 
     }catch (error) {
         console.log("Error occurred while file uploading to Azure");
@@ -157,95 +153,108 @@ module.exports = function (app, connection, log) {
         sendRelevantJSON(res, 'low_mem.json');
     })
 
-    app.post("/REMS/uploadfile", (req, res) => {
+    app.post("/REMS/uploadfile", async (req, res) => {
         const retailerId = req.cookies["retailerId"]
         const allowedExtensions = [".zip", ".upload"];
         var form = new multiparty.Form();
         var filename;
-        res.writeHead(200, { 'content-type': 'text/plain' });
-        res.write('received upload:\n\n');
         var currentdate = new Date();
 
+        //uploadDir = "./uploads"
         var targetDirectory = uploadDir + "/" + currentdate.getTime();
-
-        form.parse(req, function (err, fields, files) {
+        form.parse(req, async function (err, fields, files) {
+            // check if the upload directory exists
             if (!fs.existsSync(uploadDir)) {
+                // if not, create it
                 fs.mkdirSync(uploadDir);
             }
             
+            // uploaded file's name and extension
             filename = files["file"][0].originalFilename;
             const fileExtension = path.extname(filename);
-            var source = uploadDir + "/" + filename;
+            // var source = uploadDir + "/" + filename;
 
             if (!fs.existsSync(targetDirectory)) {
                 fs.mkdirSync(targetDirectory);
             }
 
-            //query biggest index
             var uploads = azureClient.db("pas_software_distribution").collection("uploads");
             var results = [];
             const versionPackages = [];
+            var index = 0;
+            // finds the _newest_ upload
             uploads.find({ retailer_id: retailerId }).sort({ id: -1 }).limit(1).toArray(function (err, result) {
                 results = result;
-                var index = 0;
 
+                // snags the index of the newest upload
                 if (results.length > 0) {
                     index = results[0].id;
                 }
+                // increments the index
                 index++;
-                var datetime = currentdate.getFullYear() + "-"
-                    + ((currentdate.getMonth() + 1 < 10) ? "0" : "") + (currentdate.getMonth() + 1) + "-"
-                    + ((currentdate.getDate() < 10) ? "0" : "") + currentdate.getDate() + " "
-                    + ((currentdate.getHours() < 10) ? "0" : "") + currentdate.getHours() + ":"
-                    + ((currentdate.getMinutes() < 10) ? "0" : "") + currentdate.getMinutes() + ":"
-                    + ((currentdate.getSeconds() < 10) ? "0" : "") + currentdate.getSeconds();
-
-
-                let newFileName = uploadDir + "/" + index.toString() + ".upload"
-
-                fs.copyFileSync(files["file"][0].path, newFileName);
-                /*
-                if(allowedExtensions.includes(fileExtension)) {
-                    extractZip(newFileName, targetDirectory);
-
-                    let fileNamePattern = /^ADXC.*T{1}.*D{1}.DAT$/;
-                    extractfiles = fs.readdirSync(targetDirectory);
-
-                    extractfiles.forEach(extractFile => {
-                        if(path.extname(extractFile) == ".DAT" && fileNamePattern.test(extractFile)) {
-                            console.log(extractFile)
-                            const syncData = fs.readFileSync(targetDirectory + extractFile, {encoding:'utf8', flag:'r'});
-                            if(syncData.length > 100) {
-                                let productName = syncData.substring(27, 57);
-                                let cdNum =  syncData.substring(88, 92);
-                                let productRelease = syncData.substring(92, 95);
-    
-                                const package = { productName : productName, version : cdNum+"-"+productRelease };
-                                versionPackages.push(package);
-                            }
-                        }
-                    })
-
-                    console.log(versionPackages);
-                }
-                */
-
-                let azureFileName = retailerId + "-" + index.toString() + ".upload"
-                fileUploadToAzure(files["file"][0], azureFileName).then(() => {
-                        var newFile = { id: index, retailer_id: retailerId, filename: filename, inserted: currentdate.getTime(), timestamp: datetime, archived: "false", description: fields["description"][0], packages : versionPackages };
-                            uploads.insertOne(newFile, function (err, res) {
-                                if (err) throw err;
-                        });
-                    })
-                    .catch((ex) => {
-                            console.log(ex.message);
-                            throw ex;
-                    });
-
             });
+
+            var datetime = currentdate.toISOString()
+                .replace(/T/, ' ')      // replace T with a space
+                .replace(/\..+/, '')     // delete the dot and everything after
+
+            // sets up file name as the upload directory (./uploads) 
+            // with the file name and '.upload' extension appended
+            // where file name is the updated index
+            //TODO: UPDATE THIS TO DO WHAT IT DID BEFORE IN THE CASE OF NON-ZIP FILES?
+            let copyDestination = uploadDir + "/" + filename//index.toString() + ".upload"
+            // copies file from appdata directory 
+            // (temp clone of uploaded file) to newFileName directory 
+            // as copyDestination
+            fs.copyFileSync(files["file"][0].path, copyDestination);
+            
+            if(allowedExtensions.includes(fileExtension)) {
+                await extractZip(copyDestination, targetDirectory);
+
+                // 4690 product file pattern
+                let fileNamePattern = /^ADXC.*T{1}.*D{1}.DAT$/;
+                var extractfiles = fs.readdirSync(targetDirectory);
+                extractfiles.forEach(extractFile => {
+                    if(path.extname(extractFile) == ".DAT" && fileNamePattern.test(extractFile)) {
+                        const syncData = fs.readFileSync(targetDirectory + '/' + extractFile, {encoding:'utf8', flag:'r'});
+                        if(syncData.length > 100) {
+                            let productName = (((syncData.substring(26, 57)).replace(/ +(?= )/g, '')).replace(/\0.*$/g,'')).replace(/^\s+|\s+$/g,'');
+                            let cdNum =  syncData.substring(88, 92);
+                            let productRelease = syncData.substring(92, 95);
+
+                            const package = { productName : productName, version : cdNum+"-"+productRelease };
+                            versionPackages.push(package);
+                        }
+                    }
+                })
+            }
+            
+            try {
+                let azureFileName = retailerId + "-" + index.toString() + ".upload"
+                await fileUploadToAzure(files["file"][0], azureFileName)
+                var newFile = { 
+                    id: index, 
+                    retailer_id: retailerId, 
+                    filename: filename, 
+                    inserted: currentdate.getTime(), 
+                    timestamp: datetime, 
+                    archived: "false", 
+                    description: fields["description"][0], 
+                    packages : versionPackages 
+                };
+
+                // once file is uploaded, make a record in the uploads collection
+                uploads.insertOne(newFile);
+                res.writeHead(200, { 'content-type': 'text/plain' });
+                res.write('received upload:\n\n');                
+            } catch (ex) {
+                res.writeHead(500, {'content-type': 'text/plain'});
+                res.write('upload error');
+                console.log(ex.message);
+                throw ex;
+            };
             res.send()
         });
-
     });
 
 
@@ -359,31 +368,6 @@ module.exports = function (app, connection, log) {
         const id = req.body.id
         const retailer_id = req.cookies["retailerId"]
         let storeList = req.body.storeList
-        let listNames = req.body.listNames
-
-        if(listNames){
-            var agentsNames = [];
-            let filters = {};
-
-            listNames.split(",").forEach (val => {
-                
-                filters.list_name = val;
-                var storeListDbClient = azureClient.db("pas_software_distribution").collection("store-list");
-                                
-                storeListDbClient.findOne({ retailer_id: retailer_id, ...filters}, function (err, result) {
-                    
-                    if (err) {
-                        const msg = { "error": err }
-                    } else if (!result) {
-                        console.log("No store available for this retailer");
-                    }else {
-                        agentsNames = agentsNames.concat(result.agents);
-                        storeList = agentsNames.join();
-                    }
-                    
-                });
-            });                
-        }
 
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
         configs.findOne({ retailer_id: req.cookies["retailerId"], name: name, id: id }, function (err, config) {
