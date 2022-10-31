@@ -243,8 +243,8 @@ app.get('/registers/dumps', (req, res) => {
 
   app.post("/registers/requestDump/",bodyParser.json(),  (req,res) => {
 	  msgSent = {"body": {
-		  "retailer":req.body["retailer_id"],
-		  "store":req.body["store_name"], 
+		  "retailer":req.body["retailerId"],
+		  "store":req.body["storeName"], 
 		  "agent":req.body["agent"],
 		  "dataCapture":req.body["dataCapture"]
 		}
