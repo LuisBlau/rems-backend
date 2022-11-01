@@ -252,6 +252,16 @@ app.get('/registers/dumps', (req, res) => {
     const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 	res.send(sender.sendMessages(msgSent));
   })
+  
+  app.post("/registers/requestRemsDump/",bodyParser.json(),  (req,res) => {
+	  msgSent = {"body": {
+		  "retailer":req.body['retailer'],
+		  "dataCapture":"REMS"
+		}
+	  };
+    const sender = sbClient.createSender(req.body["retailer"].toLowerCase());
+	res.send(sender.sendMessages(msgSent));
+  })
 
 app.get('/registers/captures', (req, res) => {
   var results = []
@@ -259,18 +269,24 @@ app.get('/registers/captures', (req, res) => {
 
   snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
     results = result;
- let modifiedResults = []
- for (var x of results) {
-   var y = x
+    let modifiedResults = []
+    for (var x of results) {
+      var y = x
    
-   y["Download"] = x["location"]["URL"]
-   y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
-   y["CaptureType"] = x["values"]["CaptureType"]
-   y["Agent"] = x["values"]["Agent"]
-   y["CaptureSource"] = x["values"]["CaptureSource"]
-   
-   modifiedResults.push(y)
- }
+      y["Download"] = x["location"]["URL"]
+      y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
+      y["CaptureType"] = x["values"]["CaptureType"]
+      if(x["values"]["Agent"]) {
+        y["Agent"] = x["values"]["Agent"]
+      } else {
+        y["Agent"] = "REMS"
+      }
+      if(!y["Store"])
+        y["Store"] = "REMS"
+      y["CaptureSource"] = x["values"]["CaptureSource"]
+      
+      modifiedResults.push(y)
+    }
  res.send(modifiedResults)
  });
 });
@@ -286,6 +302,17 @@ app.get('/registers/captures/:string', (req, res) => {
   };
   const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 res.send(sender.sendMessages(msgSent));
+});
+
+app.get('/registers/remscapture/:string', (req, res) => {
+  j = JSON.parse(atob(req.params["string"]))
+  msgSent = {"body": {
+    "retailer":req.cookies["retailerId"],
+    "fileName":req.params["string"]
+  }
+  };
+  const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+  res.send(sender.sendMessages(msgSent));
 });
 
 app.get('/registers/commands/:string', (req, res) => {
