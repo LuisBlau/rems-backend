@@ -87,44 +87,6 @@ async function extractZip(copyDestination, targetDirectory) {
    }
 }
 
-
-async function fileUploadToAzure(srcFile, azureFileName) {    
-    const AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=pasfileuploads;AccountKey=6Wh7jcTvZYyAGyiyq7nZWcbZHZyNPDnrVLY6OgeDv3CmhRHDBdzWc8dAAgigrEZkxYFyQR2UJ6AO+ASt/Q2DQg==;EndpointSuffix=core.windows.net";
-
-    try {
-
-        const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
-            
-            // Create a unique name for the container
-        const containerName = "rems-upload";
-        
-        // Get a reference to a container
-        const containerClient = blobServiceClient.getContainerClient(containerName);
-        
-        // Get a block blob client
-        const blockBlobClient = containerClient.getBlockBlobClient(azureFileName);
-                
-        let fileSize = 0;
-        fs.stat(srcFile.path, (err, stats) => {
-            if (err) {
-                console.log(`File doesn't exist.`);
-            } else {
-                fileSize = stats.size;
-            }
-        });
-
-        // Upload data to the blob
-        var uploadBlobResponse = await blockBlobClient.uploadFile(srcFile.path)
-        console.log( (fileSize / 1048576).toFixed(2) + "mb blob was uploaded successfully. requestId: ", uploadBlobResponse.requestId );
-        return uploadBlobResponse
-
-    }catch (error) {
-        console.log("Error occurred while file uploading to Azure");
-        throw error;
-    }
-    
-}
-
 module.exports = function (app, connection, log) {
 
 
@@ -153,30 +115,8 @@ module.exports = function (app, connection, log) {
         sendRelevantJSON(res, 'low_mem.json');
     })
 
-    var latestIndexForFileUpload = 0;
-
-    function getLatestIndex(retailerId) {
-        var uploads = azureClient.db("pas_software_distribution").collection("uploads");
-        const query = { retailer_id: retailerId };
-        const options = { sort: { "id": -1 }};
-        var results = [];
-        var index = 0;
-        uploads.find(query, options).limit(1).toArray(function (err, result) {
-            results = result;
-            // snags the index of the newest upload
-            if (results.length > 0) {
-                index = results[0].id
-            }
-            // increments the index
-            index++;
-            latestIndexForFileUpload = index;
-        })
-        return;
-    }
-
     app.post("/REMS/uploadfile", async (req, res) => {
         const retailerId = req.cookies["retailerId"]
-        getLatestIndex(retailerId);
         const allowedExtensions = [".zip", ".upload"];
         var form = new multiparty.Form();
         var filename;
@@ -238,30 +178,75 @@ module.exports = function (app, connection, log) {
             }
 
             try {
-                let azureFileName = retailerId + "-" + latestIndexForFileUpload.toString() + ".upload";
-                await fileUploadToAzure(files["file"][0], azureFileName);
-                var newFile = { 
-                    id: latestIndexForFileUpload, 
-                    retailer_id: retailerId, 
-                    filename: filename, 
-                    inserted: currentdate.getTime(), 
-                    timestamp: datetime, 
-                    archived: "false", 
-                    description: fields["description"][0], 
-                    packages : versionPackages 
-                };
+                const query = { retailer_id: retailerId };
+                const options = { sort: { "id": -1 }};
+                var results = [];
+                var index = 0;
+                uploads.find(query, options).limit(1).toArray(async function (err, result) {
+                    results = result;
+                    // snags the index of the newest upload
+                    if (results.length > 0) {
+                        index = results[0].id
+                    }
+                    // increments the index
+                    index++;
+                    let azureFileName = retailerId + "-" + index.toString() + ".upload";
+                    const AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=pasfileuploads;AccountKey=6Wh7jcTvZYyAGyiyq7nZWcbZHZyNPDnrVLY6OgeDv3CmhRHDBdzWc8dAAgigrEZkxYFyQR2UJ6AO+ASt/Q2DQg==;EndpointSuffix=core.windows.net";
 
-                // once file is uploaded, make a record in the uploads collection
-                uploads.insertOne(newFile);
-                res.writeHead(200, { 'content-type': 'text/plain' });
-                res.write('received upload:\n\n');
+                    try {
+                        const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
+                            
+                        // Create a unique name for the container
+                        const containerName = "rems-upload";
+                        // Get a reference to a container
+                        const containerClient = blobServiceClient.getContainerClient(containerName);
+                        
+                        // Get a block blob client
+                        const blockBlobClient = containerClient.getBlockBlobClient(azureFileName);
+                                
+                        let fileSize = 0;
+                        fs.stat(files["file"][0].path, (err, stats) => {
+                            if (err) {
+                                console.log(`File doesn't exist.`);
+                            } else {
+                                fileSize = stats.size;
+                            }
+                        });
+
+                        // Upload data to the blob
+                        var uploadBlobResponse = await blockBlobClient.uploadFile(files["file"][0].path)
+                        console.log( (fileSize / 1048576).toFixed(2) + "mb blob was uploaded successfully. requestId: ", uploadBlobResponse.requestId );
+
+                    }catch (error) {
+                        console.log("Error occurred while file uploading to Azure");
+                        throw error;
+                    }   
+
+                    var newFile = { 
+                        id: index, 
+                        retailer_id: retailerId, 
+                        filename: filename, 
+                        inserted: currentdate.getTime(), 
+                        timestamp: datetime, 
+                        archived: "false", 
+                        description: fields["description"][0], 
+                        packages : versionPackages 
+                    };
+    
+                    // once file is uploaded, make a record in the uploads collection
+                    uploads.insertOne(newFile);
+                    res.writeHead(200, { 'content-type': 'text/plain' });
+                    res.write('received upload:\n\n');
+                    res.send()
+                })
+
             } catch (ex) {
                 res.writeHead(500, {'content-type': 'text/plain'});
                 res.write('upload error');
+                res.send()
                 console.log(ex.message);
                 throw ex;
             };
-            res.send()
         });
     });
 
