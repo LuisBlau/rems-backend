@@ -153,8 +153,30 @@ module.exports = function (app, connection, log) {
         sendRelevantJSON(res, 'low_mem.json');
     })
 
+    var latestIndexForFileUpload = 0;
+
+    function getLatestIndex(retailerId) {
+        var uploads = azureClient.db("pas_software_distribution").collection("uploads");
+        const query = { retailer_id: retailerId };
+        const options = { sort: { "id": -1 }};
+        var results = [];
+        var index = 0;
+        uploads.find(query, options).limit(1).toArray(function (err, result) {
+            results = result;
+            // snags the index of the newest upload
+            if (results.length > 0) {
+                index = results[0].id
+            }
+            // increments the index
+            index++;
+            latestIndexForFileUpload = index;
+        })
+        return;
+    }
+
     app.post("/REMS/uploadfile", async (req, res) => {
         const retailerId = req.cookies["retailerId"]
+        getLatestIndex(retailerId);
         const allowedExtensions = [".zip", ".upload"];
         var form = new multiparty.Form();
         var filename;
@@ -179,21 +201,7 @@ module.exports = function (app, connection, log) {
             }
 
             var uploads = azureClient.db("pas_software_distribution").collection("uploads");
-            var results = [];
             const versionPackages = [];
-            var index = 0;
-            // finds the _newest_ upload
-            uploads.find({ retailer_id: retailerId }).sort({ id: -1 }).limit(1).toArray(function (err, result) {
-                results = result;
-
-                // snags the index of the newest upload
-                if (results.length > 0) {
-                    index = results[0].id;
-                }
-                // increments the index
-                index++;
-            });
-
             var datetime = currentdate.toISOString()
                 .replace(/T/, ' ')      // replace T with a space
                 .replace(/\..+/, '')     // delete the dot and everything after
@@ -228,10 +236,10 @@ module.exports = function (app, connection, log) {
                     }
                 })
             }
-            
+
             try {
-                let azureFileName = retailerId + "-" + index.toString() + ".upload"
-                await fileUploadToAzure(files["file"][0], azureFileName)
+                let azureFileName = retailerId + "-" + latestIndexForFileUpload.toString() + ".upload";
+                await fileUploadToAzure(files["file"][0], azureFileName);
                 var newFile = { 
                     id: index, 
                     retailer_id: retailerId, 
@@ -246,7 +254,7 @@ module.exports = function (app, connection, log) {
                 // once file is uploaded, make a record in the uploads collection
                 uploads.insertOne(newFile);
                 res.writeHead(200, { 'content-type': 'text/plain' });
-                res.write('received upload:\n\n');                
+                res.write('received upload:\n\n');
             } catch (ex) {
                 res.writeHead(500, {'content-type': 'text/plain'});
                 res.write('upload error');
@@ -256,7 +264,6 @@ module.exports = function (app, connection, log) {
             res.send()
         });
     });
-
 
     app.get('/REMS/uploads', (req, res) => {
         var results = []
