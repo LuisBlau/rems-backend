@@ -241,7 +241,7 @@ module.exports = function (app, connection, log) {
                 let azureFileName = retailerId + "-" + latestIndexForFileUpload.toString() + ".upload";
                 await fileUploadToAzure(files["file"][0], azureFileName);
                 var newFile = { 
-                    id: index, 
+                    id: latestIndexForFileUpload, 
                     retailer_id: retailerId, 
                     filename: filename, 
                     inserted: currentdate.getTime(), 
