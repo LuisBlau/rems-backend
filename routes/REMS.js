@@ -3,16 +3,13 @@ const { readFileSync } = require('fs')
 const path = require('path')
 const multiparty = require('multiparty');
 const fs = require('fs');
-const readline = require('readline');
 var bodyParser = require('body-parser');
 const _ = require('lodash');
-const { isRegExp, filter } = require('lodash');
+const { filter } = require('lodash');
 const statusCode = require('http-status-codes').StatusCodes
 const mongodb = require("mongodb")
 const { BlobServiceClient } = require('@azure/storage-blob');
-const { v1: uuidv1} = require('uuid');
 const extract = require('extract-zip')
-const glob = require('glob');
 require('dotenv').config()
 
 // setup dirs
@@ -142,13 +139,14 @@ module.exports = function (app, connection, log) {
 
             var uploads = azureClient.db("pas_software_distribution").collection("uploads");
             const versionPackages = [];
+
             var datetime = currentdate.toISOString()
                 .replace(/T/, ' ')      // replace T with a space
                 .replace(/\..+/, '')     // delete the dot and everything after
 
             // sets up file name as the upload directory (./uploads) 
             // with the file name and '.upload' extension appended
-            // where file name is the updated index
+            // where file name is the uniqueUploadId (random GUID)
             //TODO: UPDATE THIS TO DO WHAT IT DID BEFORE IN THE CASE OF NON-ZIP FILES?
             let copyDestination = uploadDir + "/" + filename//index.toString() + ".upload"
             // copies file from appdata directory 
@@ -176,7 +174,7 @@ module.exports = function (app, connection, log) {
                     }
                 })
             }
-
+            
             try {
                 const query = { retailer_id: retailerId };
                 const options = { sort: { "id": -1 }};
@@ -215,8 +213,7 @@ module.exports = function (app, connection, log) {
 
                         // Upload data to the blob
                         var uploadBlobResponse = await blockBlobClient.uploadFile(files["file"][0].path)
-                        console.log( (fileSize / 1048576).toFixed(2) + "mb blob was uploaded successfully. requestId: ", uploadBlobResponse.requestId );
-
+                        console.log( (fileSize / 1048576).toFixed(2) + "mb blob was uploaded successfully. requestId: ", uploadBlobResponse.requestId );                                        
                     }catch (error) {
                         console.log("Error occurred while file uploading to Azure");
                         throw error;
@@ -249,6 +246,7 @@ module.exports = function (app, connection, log) {
             };
         });
     });
+
 
     app.get('/REMS/uploads', (req, res) => {
         var results = []
