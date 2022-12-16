@@ -225,7 +225,7 @@ module.exports = function (app, connection, log) {
                         filename: filename, 
                         inserted: currentdate.getTime(), 
                         timestamp: datetime, 
-                        archived: "false", 
+                        archived: false, 
                         description: fields["description"][0], 
                         packages : versionPackages 
                     };
@@ -249,9 +249,11 @@ module.exports = function (app, connection, log) {
 
 
     app.get('/REMS/uploads', (req, res) => {
-        var results = []
+        let results = []
+		let query = { retailer_id: req.cookies["retailerId"] }
+		if(!(req.query?.archived)) query["archived"] = false
         var uploads = azureClient.db("pas_software_distribution").collection("uploads");
-        uploads.find({ retailer_id: req.cookies["retailerId"] }).toArray(function (err, result) {
+        uploads.find(query).toArray(function (err, result) {
             results = result;
 
             res.send(results)
@@ -349,7 +351,10 @@ module.exports = function (app, connection, log) {
             }
         });
     });
-
+	app.get("/REMS/setArchive", (req,res) => {
+		azureClient.db("pas_software_distribution").collection("uploads").updateOne({"_id":req.query.id},{"$set":{"archived":(req.query.archived == "true")}})
+		res.send(200)
+	})
     app.post('/deploy-schedule', bodyParser.json(), (req, res) => {
         console.log("POST deploy-schedule received : ", req.body)
 
