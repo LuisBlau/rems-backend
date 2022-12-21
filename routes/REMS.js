@@ -8,6 +8,7 @@ const _ = require('lodash');
 const { filter } = require('lodash');
 const statusCode = require('http-status-codes').StatusCodes
 const mongodb = require("mongodb")
+var {ObjectId} = require('mongodb')
 const { BlobServiceClient } = require('@azure/storage-blob');
 const extract = require('extract-zip')
 require('dotenv').config()
@@ -259,7 +260,12 @@ module.exports = function (app, connection, log) {
             res.send(results)
         });
     });
-
+	app.get("/REMS/deleteExistingList", (req,res) => {
+		console.log(req.query.id)
+		azureClient.db("pas_software_distribution").collection("store-list").deleteOne({"_id":ObjectId(req.query.id)},function (err,result) {
+			res.sendStatus(200)
+		})
+	})
     app.post('/sendCommand', bodyParser.json(), (req, res) => {
         const retailerId = req.cookies["retailerId"]
         //query biggest index

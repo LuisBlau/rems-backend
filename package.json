@@ -4,7 +4,8 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node app.js",
+    "dev": "npx nodemon app.js -e js,ejs,html,css"
   },
   "author": "",
   "license": "ISC",
@@ -29,10 +30,12 @@
     "mongodb": "^4.6.0",
     "multiparty": "^4.2.3",
     "mysql2": "^2.3.3",
-    "nodemon": "^2.0.16",
     "pg": "^8.7.3",
     "sequelize": "^6.19.1",
     "sqlstring": "^2.3.3",
     "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.20"
   }
 }
