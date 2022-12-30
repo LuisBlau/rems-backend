@@ -532,6 +532,29 @@ module.exports = function (app, connection, log) {
         })
     });
 
+    app.get('/REMS/stores/alerts', (req, res) => {
+        console.log("Get /REMS/stores/alerts received : ", req.query)
+
+        const alerts = azureClient.db("pas_availability").collection("alerts");
+        console.log(alerts)
+        //        retailerDetails.find({retailer_id: req.query.id}).limit(1).toArray(function (err, result) {
+
+        alerts.find({ retailer_id: req.cookies["retailerId"]}, {storeName: req.storeName}).toArray(function (err, pasAvailability) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!pasAvailability) {
+                const msg = { "message": "Rems: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+                console.log("sending alerts info : ", pasAvailability)
+                res.status(statusCode.OK).json(pasAvailability);
+            }
+        });
+    });
+
     app.get('/REMS/rems', (req, res) => {
         console.log("Get /REMS/rems received : ", req.query)
         var results = [];
@@ -895,7 +918,6 @@ module.exports = function (app, connection, log) {
         var results = {}
         var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
         retailerDetails.find({retailer_id: req.query.id}).limit(1).toArray(function (err, result) {
-            console.log(req.query.id)
             console.log(result)
             if (err) {
                 const msg = { "error": err }
