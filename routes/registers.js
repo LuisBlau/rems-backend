@@ -201,8 +201,14 @@ app.get('/registers/extracts', (req, res) => {
   });
 app.get('/registers/dumps', (req, res) => {
    var results = []
+  var filter = {"Retailer":req.cookies["retailerId"]};
+
+  if (req.query["store"] != undefined && req.query["store"] != 'undefined') {
+    filter.Store = req.query['store']
+  }
+
    var snapshots = azureClient.db("pas_reloads").collection("dumps");
-   snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
+   snapshots.find(filter).toArray(function(err, result){
      results = result;
 	let modifiedResults = []
 	for (var x of results) {
@@ -212,7 +218,7 @@ app.get('/registers/dumps', (req, res) => {
 		y["Version"] = x["values"]["Version"]
     y["Reason"] = x["values"]["Reason"]
 		if(x["RegNum"]) {
-			y["System"] = x["RegNum"]
+			y["System"] = "Register " + x["RegNum"]
 		} else {
 			y["System"] = x["values"]["Controller ID"]
 		}
