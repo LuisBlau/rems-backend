@@ -3,12 +3,12 @@ const atob = require("atob")
 const btoa = require("btoa")
 var bodyParser = require('body-parser');
 const mongodb = require("mongodb")
-
+const mssql = require('mssql');
+const getAdbConnection = require("../assetdb")
 const { ServiceBusClient } = require("@azure/service-bus");
 const sbClient = new ServiceBusClient("Endpoint=sb://remscomm.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=Dk+TDFecPYBkRKtCqqudv1dnrN2hR5bcEN1t1alztOI=");
 var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
-
 function formatCount(resp) {
   count_dict = []
   return resp.map( element => (({
@@ -17,7 +17,6 @@ function formatCount(resp) {
   })))
 
 }
-
 function formatClauses(req) {
   const timeClause = req.get("hours") > 0 ? sqlString.format('and Snapshots.logtime >= ( current_date - interval \'? hours\' ) ', parseInt(req.get("hours"))) : ''
   const storeClause = req.get("store") > 0 ? sqlString.format('and Snapshots.store = ? ', req.get("store")) : ''
@@ -31,7 +30,31 @@ module.exports = function (app, connection, log) {
 	const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
 	res.send(sender.sendMessages({"body": req.body}));
   })
+  app.get('/registers/assets', (req, res) => {
+	    let retailerCollection = azureClient.db("pas_software_distribution").collection("retailers");
+		retailerCollection.findOne({"retailer_id":req.cookies["retailerId"]}, async function(err, result){
+			if(!("assetTableName" in result)) {
+				res.send(403)
+				return
+			}
+			let query = " SELECT * FROM " + result["assetTableName"] + "_Inventory"
+			if("store" in req.query) {
+				query += sqlString.format(" WHERE Store = ?", req.query["store"])
+			}
+			if("page" in req.query) {
+				query += " ORDER BY MAC_Address OFFSET " + req.query["page"]*100 + "ROWS FETCH NEXT 100 ROWS ONLY"
+			} else {
+				query += " ORDER BY MAC_Address OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY"
+			}
+			getAdbConnection().then(async function cb(adbConn) {
+				let resultSet = await adbConn.request().query(query)
+				res.send(resultSet.recordset)
+				adbConn.close()
+			})
 
+		})
+
+  })
   app.get('/getSNMPConfig', (req, res) => {
     let snmpDatabase = azureClient.db("pas_software_distribution").collection("config-files");
     if (req.query["sName"] != undefined && req.query["aName"] != undefined) {

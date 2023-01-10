@@ -28,6 +28,7 @@
     "loglevel": "^1.8.0",
     "loglevel-format": "^1.1.2",
     "mongodb": "^4.6.0",
+    "mssql": "^9.0.1",
     "multiparty": "^4.2.3",
     "mysql2": "^2.3.3",
     "pg": "^8.7.3",
