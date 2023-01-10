@@ -160,29 +160,9 @@ module.exports = function (app, connection, log) {
     console.log("Extracts - "+req.cookies["retailerId"])
      var results = []
    var snapshots = azureClient.db("pas_reloads").collection("extracts");
-   snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
-     results = result;
-	let modifiedResults = []
-	for (var x of results) {
-		var y = x
-	    y["InStore"] = x["location"]["Store"]
-		y["Download"] = x["location"]["URL"]
-		y["Version"] = x["values"]["Version"]
-		y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
-		y["ExtractType"] = x["values"]["ExtractType"]
-		y["State"] = x["values"]["State"]
-    y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
-		modifiedResults.push(y)
-	}
-	res.send(modifiedResults)
-  });
-  });
-
-app.get('/registers/extracts', (req, res) => {
-  console.log("Extracts - "+req.cookies["retailerId"])
-   var results = []
-   var snapshots = azureClient.db("pas_reloads").collection("extracts");
-   snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
+   let query = {"Retailer":req.cookies["retailerId"]}
+   if("Store" in req.query) query["Store"] = req.query["Store"]
+   snapshots.find(query).toArray(function(err, result){
      results = result;
 	let modifiedResults = []
 	for (var x of results) {
@@ -208,7 +188,9 @@ app.get('/registers/dumps', (req, res) => {
   }
 
    var snapshots = azureClient.db("pas_reloads").collection("dumps");
-   snapshots.find(filter).toArray(function(err, result){
+   let query = {"Retailer":req.cookies["retailerId"]}
+   if("Store" in req.query) query["Store"] = req.query["Store"]
+   snapshots.find(query).toArray(function(err, result){
      results = result;
 	let modifiedResults = []
 	for (var x of results) {
