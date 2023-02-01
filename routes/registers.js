@@ -11,7 +11,7 @@ var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUv
 azureClient.connect();
 function formatCount(resp) {
   count_dict = []
-  return resp.map( element => (({
+  return resp.map(element => (({
     "name": element["property_value"],
     "value": element["count"]
   })))
@@ -20,39 +20,39 @@ function formatCount(resp) {
 function formatClauses(req) {
   const timeClause = req.get("hours") > 0 ? sqlString.format('and Snapshots.logtime >= ( current_date - interval \'? hours\' ) ', parseInt(req.get("hours"))) : ''
   const storeClause = req.get("store") > 0 ? sqlString.format('and Snapshots.store = ? ', req.get("store")) : ''
-  return {timeClause, storeClause}
+  return { timeClause, storeClause }
 }
 
 module.exports = function (app, connection, log) {
   app.post('/sendSNMPRequest', bodyParser.json(), (req, res) => {
     console.log("New SNMP Request set");
     console.log(JSON.stringify(req.body))
-	const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
-	res.send(sender.sendMessages({"body": req.body}));
+    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    res.send(sender.sendMessages({ "body": req.body }));
   })
   app.get('/registers/assets', (req, res) => {
-	    let retailerCollection = azureClient.db("pas_software_distribution").collection("retailers");
-		retailerCollection.findOne({"retailer_id":req.cookies["retailerId"]}, async function(err, result){
-			if(!("assetTableName" in result)) {
-				res.send(403)
-				return
-			}
-			let query = " SELECT * FROM " + result["assetTableName"] + "_Inventory"
-			if("store" in req.query) {
-				query += sqlString.format(" WHERE Store = ?", req.query["store"])
-			}
-			if("page" in req.query) {
-				query += " ORDER BY MAC_Address OFFSET " + req.query["page"]*100 + "ROWS FETCH NEXT 100 ROWS ONLY"
-			} else {
-				query += " ORDER BY MAC_Address OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY"
-			}
-			getAdbConnection().then(async function cb(adbConn) {
-				let resultSet = await adbConn.request().query(query)
-				res.send(resultSet.recordset)
-				adbConn.close()
-			})
+    let retailerCollection = azureClient.db("pas_software_distribution").collection("retailers");
+    retailerCollection.findOne({ "retailer_id": req.cookies["retailerId"] }, async function (err, result) {
+      if (!("assetTableName" in result)) {
+        res.send(403)
+        return
+      }
+      let query = " SELECT * FROM " + result["assetTableName"] + "_Inventory"
+      if ("store" in req.query) {
+        query += sqlString.format(" WHERE Store = ?", req.query["store"])
+      }
+      if ("page" in req.query) {
+        query += " ORDER BY MAC_Address OFFSET " + req.query["page"] * 100 + "ROWS FETCH NEXT 100 ROWS ONLY"
+      } else {
+        query += " ORDER BY MAC_Address OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY"
+      }
+      getAdbConnection().then(async function cb(adbConn) {
+        let resultSet = await adbConn.request().query(query)
+        res.send(resultSet.recordset)
+        adbConn.close()
+      })
 
-		})
+    })
 
   })
   app.get('/getSNMPConfig', (req, res) => {
@@ -61,7 +61,7 @@ module.exports = function (app, connection, log) {
       snmpDatabase.findOne({
         storeName: req.query["sName"],
         agentName: req.query["aName"]
-      }, function(err, result) {
+      }, function (err, result) {
         if (err || result === null) {
           log.info(`GET store: ${req.query["sName"]} and agent: ${req.query["aName"]}`);
           if (err) {
@@ -76,7 +76,7 @@ module.exports = function (app, connection, log) {
       });
     }
   })
-  
+
   app.get('/registers/:storenum-:regnum', (req, res) => {
     connection.query(sqlString.format('SELECT * FROM Registers ' +
       'INNER JOIN Properties ON Registers.property_id = Properties.property_id ' +
@@ -95,7 +95,7 @@ module.exports = function (app, connection, log) {
   })
 
   app.get('/registers/reloads/', (req, res) => {
-    const {storeClause, timeClause} = formatClauses(req)
+    const { storeClause, timeClause } = formatClauses(req)
 
 
     connection.query(sqlString.format('SELECT COUNT(*)' +
@@ -117,17 +117,17 @@ module.exports = function (app, connection, log) {
         }
       })
   })
-  
-  app.get("/registers/versions", async (req,res) => {
-	  let versions = {}
-	  let docs = await azureClient.db("pas_software_distribution").collection("agents").distinct("versions",{"retailer_id":req.cookies["retailerId"]})
-    for(var y of docs) { 
-      if(!versions[Object.keys(y)[0]]) versions[Object.keys(y)[0]] = []
-      if(versions[Object.keys(y)[0]].indexOf(y[Object.keys(y)[0]]) == -1) {
+
+  app.get("/registers/versions", async (req, res) => {
+    let versions = {}
+    let docs = await azureClient.db("pas_software_distribution").collection("agents").distinct("versions", { "retailer_id": req.cookies["retailerId"] })
+    for (var y of docs) {
+      if (!versions[Object.keys(y)[0]]) versions[Object.keys(y)[0]] = []
+      if (versions[Object.keys(y)[0]].indexOf(y[Object.keys(y)[0]]) == -1) {
         versions[Object.keys(y)[0]].push(y[Object.keys(y)[0]])
       }
-	  }
-	  res.send(versions)
+    }
+    res.send(versions)
   })
 
   app.get('/registers/pinpad', (req, res) => {
@@ -174,170 +174,176 @@ module.exports = function (app, connection, log) {
           res.send(JSON.stringify(err))
         } else {
           log.info(`GET ${req.originalUrl}`)
-		  log.info(formatCount(resp['rows']))
+          log.info(formatCount(resp['rows']))
           res.send(formatCount(resp['rows']))
         }
       })
   })
   app.get('/registers/extracts', (req, res) => {
-    console.log("Extracts - "+req.cookies["retailerId"])
-     var results = []
-   var snapshots = azureClient.db("pas_reloads").collection("extracts");
-   let query = {"Retailer":req.cookies["retailerId"]}
-   if("Store" in req.query) query["Store"] = req.query["Store"]
-   snapshots.find(query).toArray(function(err, result){
-     results = result;
-	let modifiedResults = []
-	for (var x of results) {
-		var y = x
-	    y["InStore"] = x["location"]["Store"]
-		y["Download"] = x["location"]["URL"]
-		y["Version"] = x["values"]["Version"]
-		y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
-		y["ExtractType"] = x["values"]["ExtractType"]
-		y["State"] = x["values"]["State"]
-    y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
-		modifiedResults.push(y)
-	}
-	res.send(modifiedResults)
+    console.log("Extracts - " + req.cookies["retailerId"])
+    var results = []
+    var snapshots = azureClient.db("pas_reloads").collection("extracts");
+    let query = { "Retailer": req.cookies["retailerId"] }
+    if ("Store" in req.query) query["Store"] = req.query["Store"]
+    snapshots.find(query).toArray(function (err, result) {
+      results = result;
+      let modifiedResults = []
+      for (var x of results) {
+        var y = x
+        y["InStore"] = x["location"]["Store"]
+        y["Download"] = x["location"]["URL"]
+        y["Version"] = x["values"]["Version"]
+        y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+        y["ExtractType"] = x["values"]["ExtractType"]
+        y["State"] = x["values"]["State"]
+        y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
+        modifiedResults.push(y)
+      }
+      res.send(modifiedResults)
+    });
   });
-  });
-app.get('/registers/dumps', (req, res) => {
-   var results = []
-  var filter = {"Retailer":req.cookies["retailerId"]};
+  app.get('/registers/dumps', (req, res) => {
+    var results = []
+    var filter = { "Retailer": req.cookies["retailerId"] };
 
-  if (req.query["store"] != undefined && req.query["store"] != 'undefined') {
-    filter.Store = req.query['store']
-  }
+    if (req.query["store"] != undefined && req.query["store"] != 'undefined') {
+      filter.Store = req.query['store']
+    }
 
-   var snapshots = azureClient.db("pas_reloads").collection("dumps");
-   let query = {"Retailer":req.cookies["retailerId"]}
-   if("Store" in req.query) query["Store"] = req.query["Store"]
-   snapshots.find(query).toArray(function(err, result){
-     results = result;
-	let modifiedResults = []
-	for (var x of results) {
-		var y = x
-    
-    y["Download"] = x["location"]["URL"]
-		y["Version"] = x["values"]["Version"]
-    y["Reason"] = x["values"]["Reason"]
-		if(x["RegNum"]) {
-			y["System"] = "Register " + x["RegNum"]
-		} else {
-			y["System"] = x["values"]["Controller ID"]
-		}
-		y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
-		y["ExtractType"] = x["values"]["ExtractType"]
-		y["State"] = x["values"]["State"]
-		y["Rids"] = x["values"]["rids"]
+    var snapshots = azureClient.db("pas_reloads").collection("dumps");
+    let query = { "Retailer": req.cookies["retailerId"] }
+    if ("Store" in req.query) query["Store"] = req.query["Store"]
+    snapshots.find(query).toArray(function (err, result) {
+      results = result;
+      let modifiedResults = []
+      for (var x of results) {
+        var y = x
 
-    modifiedResults.push(y)
-	}
-	res.send(modifiedResults)
-  });
+        y["Download"] = x["location"]["URL"]
+        y["Version"] = x["values"]["Version"]
+        y["Reason"] = x["values"]["Reason"]
+        if (x["RegNum"]) {
+          y["System"] = "Register " + x["RegNum"]
+        } else {
+          y["System"] = x["values"]["Controller ID"]
+        }
+        y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+        y["ExtractType"] = x["values"]["ExtractType"]
+        y["State"] = x["values"]["State"]
+        y["Rids"] = x["values"]["rids"]
+
+        modifiedResults.push(y)
+      }
+      res.send(modifiedResults)
+    });
   });
 
 
   app.get('/registers/extracts/:string', (req, res) => {
-	  j = JSON.parse(atob(req.params["string"]))
-	  msgSent = {"body": {
-		  "retailer":j.Retailer,
-		  "store":j.Store, 
-		  "filename":j.values.File
-		}
-	  };
-    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
-	res.send(sender.sendMessages(msgSent));
-  })
-  
-
-  app.post("/registers/requestDump/",bodyParser.json(),  (req,res) => {
-	  msgSent = {"body": {
-		  "retailer":req.body["retailerId"],
-		  "store":req.body["storeName"], 
-		  "agent":req.body["agent"],
-		  "dataCapture":req.body["dataCapture"]
-		}
-	  };
-    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
-	res.send(sender.sendMessages(msgSent));
-  })
-  
-  app.post("/registers/requestRemsDump/",bodyParser.json(),  (req,res) => {
-	  msgSent = {"body": {
-		  "retailer":req.body['retailer'],
-		  "dataCapture":"REMS"
-		}
-	  };
-    const sender = sbClient.createSender(req.body["retailer"].toLowerCase());
-	res.send(sender.sendMessages(msgSent));
-  })
-
-app.get('/registers/captures', (req, res) => {
-  var results = []
-  var snapshots = azureClient.db("pas_reloads").collection("captures");
-
-  snapshots.find({"Retailer":req.cookies["retailerId"]}).toArray(function(err, result){
-    results = result;
-    let modifiedResults = []
-    for (var x of results) {
-      var y = x
-   
-      y["Download"] = x["location"]["URL"]
-      y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g",""))))
-      y["CaptureType"] = x["values"]["CaptureType"]
-      if(x["values"]["Agent"]) {
-        y["Agent"] = x["values"]["Agent"]
-      } else {
-        y["Agent"] = "REMS"
+    j = JSON.parse(atob(req.params["string"]))
+    msgSent = {
+      "body": {
+        "retailer": j.Retailer,
+        "store": j.Store,
+        "filename": j.values.File
       }
-      if(!y["Store"])
-        y["Store"] = "REMS"
-      y["CaptureSource"] = x["values"]["CaptureSource"]
-      
-      modifiedResults.push(y)
-    }
- res.send(modifiedResults)
- });
-});
+    };
+    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    res.send(sender.sendMessages(msgSent));
+  })
 
 
-app.get('/registers/captures/:string', (req, res) => {
-  j = JSON.parse(atob(req.params["string"]))
-  msgSent = {"body": {
-    "retailer":j.Retailer,
-    "store":j.Store, 
-    "filename":j.values.File
-  }
-  };
-  const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
-res.send(sender.sendMessages(msgSent));
-});
+  app.post("/registers/requestDump/", bodyParser.json(), (req, res) => {
+    msgSent = {
+      "body": {
+        "retailer": req.body["retailerId"],
+        "store": req.body["storeName"],
+        "agent": req.body["agent"],
+        "dataCapture": req.body["dataCapture"]
+      }
+    };
+    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    res.send(sender.sendMessages(msgSent));
+  })
 
-app.get('/registers/remscapture/:string', (req, res) => {
-  j = JSON.parse(atob(req.params["string"]))
-  msgSent = {"body": {
-    "retailer":req.cookies["retailerId"],
-    "fileName":req.params["string"]
-  }
-  };
-  const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
-  res.send(sender.sendMessages(msgSent));
-});
+  app.post("/registers/requestRemsDump/", bodyParser.json(), (req, res) => {
+    msgSent = {
+      "body": {
+        "retailer": req.body['retailer'],
+        "dataCapture": "REMS"
+      }
+    };
+    const sender = sbClient.createSender(req.body["retailer"].toLowerCase());
+    res.send(sender.sendMessages(msgSent));
+  })
 
-app.get('/registers/commands/:string', (req, res) => {
-  j = JSON.parse(atob(req.params["string"]))
-  msgSent = {"body": {
-    "retailer":j.Retailer,
-    "store":j.Store, 
-    "agent":j.Agent,
-    "command":j.Command
-  }
-  };
-  const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
-res.send(sender.sendMessages(msgSent));
-});
+  app.get('/registers/captures', (req, res) => {
+    var results = []
+    var snapshots = azureClient.db("pas_reloads").collection("captures");
+
+    snapshots.find({ "Retailer": req.cookies["retailerId"] }).toArray(function (err, result) {
+      results = result;
+      let modifiedResults = []
+      for (var x of results) {
+        var y = x
+
+        y["Download"] = x["location"]["URL"]
+        y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+        y["CaptureType"] = x["values"]["CaptureType"]
+        if (x["values"]["Agent"]) {
+          y["Agent"] = x["values"]["Agent"]
+        } else {
+          y["Agent"] = "REMS"
+        }
+        if (!y["Store"])
+          y["Store"] = "REMS"
+        y["CaptureSource"] = x["values"]["CaptureSource"]
+
+        modifiedResults.push(y)
+      }
+      res.send(modifiedResults)
+    });
+  });
+
+
+  app.get('/registers/captures/:string', (req, res) => {
+    j = JSON.parse(atob(req.params["string"]))
+    msgSent = {
+      "body": {
+        "retailer": j.Retailer,
+        "store": j.Store,
+        "filename": j.values.File
+      }
+    };
+    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    res.send(sender.sendMessages(msgSent));
+  });
+
+  app.get('/registers/remscapture/:string', (req, res) => {
+    j = JSON.parse(atob(req.params["string"]))
+    msgSent = {
+      "body": {
+        "retailer": req.cookies["retailerId"],
+        "fileName": req.params["string"]
+      }
+    };
+    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    res.send(sender.sendMessages(msgSent));
+  });
+
+  app.get('/registers/commands/:string', (req, res) => {
+    j = JSON.parse(atob(req.params["string"]))
+    msgSent = {
+      "body": {
+        "retailer": j.Retailer,
+        "store": j.Store,
+        "agent": j.Agent,
+        "command": j.Command
+      }
+    };
+    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    res.send(sender.sendMessages(msgSent));
+  });
 
 
 }
