@@ -758,6 +758,84 @@ module.exports = function (app, connection, log) {
         }
     });
 
+    app.get('/REMS/toshibaConfiguration', (req, res) => {
+        const configurations = azureClient.db("pas_config").collection("configurations");
+
+        configurations.find({ configType: 'toshibaAdmin' }).toArray(function (err, result) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!result) {
+                const msg = { "message": "Config: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            } else {
+                const configurationData = result
+                const configurationResponse = {}
+
+                configurationData.forEach((config, index) => {
+                    let tempObj = {
+                        configName: config.configName,
+                        configValue: config.configDefaultValue,
+                        configValueType: config.configValueType,
+                        configDisplay: config.configDisplay
+                    }
+                    _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
+                });
+                console.log("Found admin config data: ", configurationResponse)
+                res.status(statusCode.OK).json(configurationResponse);
+
+            }
+        })
+    });
+
+    app.post('/REMS/toshibaConfigurationUpdate', bodyParser.json(), (request, response) => {
+        let updateWasGood = true
+        const receivedConfigItems = []
+
+        request.body.forEach(configItem => {
+            receivedConfigItems.push(configItem)
+        });
+
+        if (receivedConfigItems.length > 0) {
+            // For each configuration received, go update them
+            receivedConfigItems.forEach(configItem => {
+                const configQuery = { configType: 'toshibaAdmin', configName: configItem.configName };
+                let configUpdate
+                if (configItem.configValueType !== 'boolean') {
+                    configUpdate = { $set: { configDefaultValue: configItem.configValue } }
+                } else {
+                    configUpdate = { $set: { configDefaultValue: String(configItem.configValue) } }
+                }
+
+                const configToUpdate = azureClient.db("pas_config").collection("configurations");
+                // DO UPDATE
+                configToUpdate.updateOne(configQuery, configUpdate, function (error, updateResult) {
+                    if (error) {
+                        console.log("Update error : ", error)
+                        const msg = { "message": "Error updating retailer configuration" }
+                        updateWasGood = false
+                        response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                        throw (error)
+                    }
+
+                    if (updateResult) {
+                        const responseInfo =
+                            " [ ConfigName: " + configItem.configName +
+                            " Value: " + updateResult +
+                            " ]";
+
+                        console.log("Update Toshiba Administrative Configuration SUCCESS : ", responseInfo)
+                    }
+                })
+            });
+            if (updateWasGood) {
+                response.status(statusCode.OK).json({ "message": "SUCCESS" });
+                return
+            }
+        }
+    });
+
     app.post('/deploy-cancel', bodyParser.json(), (request, response) => {
         console.log("POST deploy-update received : ", request.body)
         const storeName = request.body.storeName;
