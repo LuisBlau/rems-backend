@@ -632,6 +632,26 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.get('/REMS/allStores', (req, res) => {
+        console.log("Get /REMS/allStores received : ", req.query)
+
+        const agents = azureClient.db("pas_software_distribution").collection("stores");
+        agents.find().toArray(function (err, agentList) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!agentList) {
+                const msg = { "message": "Agents: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+                console.log("sending storeList : ", agentList)
+                res.status(statusCode.OK).json(agentList);
+            }
+        });
+    });
+
     app.get('/REMS/retailerConfiguration', (req, res) => {
         const configurations = azureClient.db("pas_config").collection("configurations");
         const retailers = azureClient.db("pas_software_distribution").collection("retailers");
