@@ -1157,4 +1157,17 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.get('/REMS/getAllRetailerDetails', (req, res) => {
+        var retailersDetails = azureClient.db("pas_software_distribution").collection("retailers");
+        retailersDetails.find().toArray(function (err, result) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else {
+                res.send(result)
+            }
+        });
+    });
+
 }
