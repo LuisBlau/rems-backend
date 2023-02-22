@@ -261,7 +261,6 @@ module.exports = function (app, connection, log) {
         });
     });
     app.get("/REMS/deleteExistingList", (req, res) => {
-        console.log(req.query.id)
         azureClient.db("pas_software_distribution").collection("store-list").deleteOne({ "_id": ObjectId(req.query.id) }, function (err, result) {
             res.sendStatus(200)
         })
@@ -536,10 +535,9 @@ module.exports = function (app, connection, log) {
         console.log("Get /REMS/stores/alerts received : ", req.query)
 
         const alerts = azureClient.db("pas_availability").collection("alerts");
-        console.log(alerts)
         //        retailerDetails.find({retailer_id: req.query.id}).limit(1).toArray(function (err, result) {
 
-        alerts.find({ retailer_id: req.cookies["retailerId"] }, { storeName: req.storeName }).toArray(function (err, pasAvailability) {
+        alerts.find({ retailer_id: req.query.retailerId, storeName: req.query.storeName }).toArray(function (err, pasAvailability) {
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -595,6 +593,26 @@ module.exports = function (app, connection, log) {
 
         var agents = azureClient.db("pas_software_distribution").collection("agents");
         agents.find({ retailer_id: req.cookies["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
+            if (err) {
+                const msg = { "error": err };
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                throw err;
+            } else if (!agentList) {
+                const msg = { "message": "Agents: Error reading from server" };
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+                console.log("sending agentList : ", agentList);
+                res.status(statusCode.OK).json(agentList);
+            }
+        });
+    });
+
+    app.get('/REMS/agentsForStore', (req, res) => {
+        console.log("Get /REMS/agentsForStore received : ", req.query);
+
+        var agents = azureClient.db("pas_software_distribution").collection("agents");
+        agents.find({ retailer_id: req.query.retailerId, storeName: req.query.storeName }, {}).toArray(function (err, agentList) {
             if (err) {
                 const msg = { "error": err };
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);

@@ -3,8 +3,6 @@ const cors = require('cors')
 const https = require('https')
 const fs = require('fs')
 const helmet = require('helmet')
-const jwtAuth = require('./middleware/jwtauth')
-console.log(cookieParser)
 // Logging
 const log = require('loglevel')
 const prefix = require('loglevel-format')
@@ -36,7 +34,6 @@ app.use(cors())
 var cookieParser = require('cookie-parser')
 app.use(cookieParser())
 // app.use(jwtAuth()) turning off the auth cookie
-const mysql = require('mysql2')
 const { DB, HOST, PASSWORD, USER } = require('./db.config')
 
 const { Pool } = require('pg')

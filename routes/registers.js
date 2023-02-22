@@ -238,6 +238,68 @@ module.exports = function (app, connection, log) {
     });
   });
 
+  app.get('/registers/dumpsForStore', (req, res) => {
+    var snapshots = azureClient.db("pas_reloads").collection("dumps");
+    snapshots.find({ Retailer: req.query.retailerId, Store: req.query.storeName }).toArray(function (err, results) {
+      if (err) {
+        const msg = { "error": err }
+        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+        throw err
+      } else if (!results) {
+        const msg = { "message": "No dumps found for store" }
+        res.status(statusCode.NO_CONTENT).json(msg);
+      } else {
+        let modifiedResults = []
+        for (var x of results) {
+          var y = x
+
+          y["Download"] = x["location"]["URL"]
+          y["Version"] = x["values"]["Version"]
+          y["Reason"] = x["values"]["Reason"]
+          if (x["RegNum"]) {
+            y["System"] = "Register " + x["RegNum"]
+          } else {
+            y["System"] = x["values"]["Controller ID"]
+          }
+          y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+          y["ExtractType"] = x["values"]["ExtractType"]
+          y["State"] = x["values"]["State"]
+          y["Rids"] = x["values"]["rids"]
+
+          modifiedResults.push(y)
+        }
+        res.send(modifiedResults)
+      }
+    })
+  });
+
+  app.get('/registers/extractsForStore', (req, res) => {
+    var snapshots = azureClient.db("pas_reloads").collection("extracts");
+    snapshots.find({ Retailer: req.query.retailerId, Store: req.query.storeName }).toArray(function (err, results) {
+      if (err) {
+        const msg = { "error": err }
+        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+        throw err
+      } else if (!results) {
+        const msg = { "message": "No dumps found for store" }
+        res.status(statusCode.NO_CONTENT).json(msg);
+      } else {
+        let modifiedResults = []
+        for (var x of results) {
+          var y = x
+          y["InStore"] = x["location"]["Store"]
+          y["Download"] = x["location"]["URL"]
+          y["Version"] = x["values"]["Version"]
+          y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+          y["ExtractType"] = x["values"]["ExtractType"]
+          y["State"] = x["values"]["State"]
+          y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
+          modifiedResults.push(y)
+        }
+        res.send(modifiedResults)
+      }
+    });
+  });
 
   app.get('/registers/extracts/:string', (req, res) => {
     j = JSON.parse(atob(req.params["string"]))
