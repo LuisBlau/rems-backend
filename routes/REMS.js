@@ -630,11 +630,10 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/stores', (req, res) => {
         console.log("Get /REMS/stores received : ", req.query)
-        var results = [];
         let filters = {}
 
         const agents = azureClient.db("pas_software_distribution").collection("stores");
-        agents.find({ retailer_id: req.cookies["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
+        agents.find({ retailer_id: req.query["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -644,7 +643,6 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending storeList : ", agentList)
                 res.status(statusCode.OK).json(agentList);
             }
         });
@@ -1094,8 +1092,6 @@ module.exports = function (app, connection, log) {
             }
             else {
                 output = rems.map(function (item) { return item.retailer_id; })
-                console.log("sending rems info : ", output)
-
                 res.status(statusCode.OK).json(output);
             }
         });
