@@ -671,8 +671,16 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/retailerConfiguration', (req, res) => {
         const configurations = azureClient.db("pas_config").collection("configurations");
         const retailers = azureClient.db("pas_software_distribution").collection("retailers");
+        let query = null
+        if (req.query.isAdmin === 'true') {
+            query = { configType: 'retailer' }
+            console.log(query)
+        } else {
+            query = { configType: 'retailer', toshibaOnly: false }
+            console.log(query)
+        }
 
-        configurations.find({ configType: 'retailer' }).toArray(function (err, result) {
+        configurations.find(query).toArray(function (err, result) {
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -766,6 +774,15 @@ module.exports = function (app, connection, log) {
                             _.set(updatedConfiguration, existingConfigItemName, receivedConfigItems[receivedIndex].configValue)
                         }
                     });
+
+                    // add back anything that wasn't sent in (this matters for retailer configs that are set by Toshiba, which the retailer can't see or send)
+                    Object.entries(existingConfigurations).forEach(configItem => {
+                        const receivedIndex = _.findIndex(receivedConfigItems, (x) => x.configName === configItem[0])
+                        if (receivedIndex === -1) {
+                            _.set(updatedConfiguration, configItem[0], configItem[1])
+                        }
+                    });
+
 
                     // DO UPDATE
                     retailers.updateOne(configQuery, configUpdate, function (error, updateResult) {
