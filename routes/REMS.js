@@ -1134,7 +1134,7 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/getRoleDetails', (req, res) => {
         var results = {}
         var userRoles = azureClient.db("pas_config").collection("user");
-        userRoles.find({ email: req.query.email }).limit(1).toArray(function (err, result) {
+        userRoles.find({ email: { '$regex': req.query.email, $options: 'i' }}).limit(1).toArray(function (err, result) {
 
             if (err) {
                 const msg = { "error": err }
@@ -1153,7 +1153,7 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/getUserDetails', (req, res) => {
         var results = {}
         var userDetails = azureClient.db("pas_config").collection("user");
-        userDetails.find({ email: req.query.email }).limit(1).toArray(function (err, result) {
+        userDetails.find({ email: { '$regex': req.query.email, $options: 'i' } }).limit(1).toArray(function (err, result) {
 
             if (err) {
                 const msg = { "error": err }
@@ -1173,7 +1173,6 @@ module.exports = function (app, connection, log) {
         var results = {}
         var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
         retailerDetails.find({ retailer_id: req.query.id }).limit(1).toArray(function (err, result) {
-            console.log(result)
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
