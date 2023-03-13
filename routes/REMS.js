@@ -631,9 +631,13 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/stores', (req, res) => {
         console.log("Get /REMS/stores received : ", req.query)
         let filters = {}
-
+        let query = req.query["retailerId"]
+        if (!req.query["retailerId"]) {
+            query = req.cookies["retailerId"]
+        }
         const agents = azureClient.db("pas_software_distribution").collection("stores");
-        agents.find({ retailer_id: req.query["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
+        agents.find({ retailer_id: query, ...filters }, {}).toArray(function (err, agentList) {
+
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -1134,7 +1138,7 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/getRoleDetails', (req, res) => {
         var results = {}
         var userRoles = azureClient.db("pas_config").collection("user");
-        userRoles.find({ email: { '$regex': req.query.email, $options: 'i' }}).limit(1).toArray(function (err, result) {
+        userRoles.find({ email: { '$regex': req.query.email, $options: 'i' } }).limit(1).toArray(function (err, result) {
 
             if (err) {
                 const msg = { "error": err }
