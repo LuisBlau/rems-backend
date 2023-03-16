@@ -754,8 +754,18 @@ module.exports = function (app, connection, log) {
                     const msg = { "message": "Retailer Configs: Error reading from server" }
                     res.status(statusCode.NO_CONTENT).json(msg);
                 } else {
-                    const existingConfigurations = results[0].configuration
-                    const existingConfigNames = Object.keys(existingConfigurations)
+                    let existingConfigurations
+                    if (results[0].configuration) {
+                        existingConfigurations = results[0].configuration
+                    } else {
+                        existingConfigurations = {}
+                    }
+                    let existingConfigNames
+                    if (existingConfigurations.length > 0) {
+                        existingConfigNames = Object.keys(existingConfigurations)
+                    } else {
+                        existingConfigNames = []
+                    }
 
                     // handle configs that weren't previously stored for this retailer
                     receivedConfigItems.forEach((config, index) => {
@@ -765,23 +775,27 @@ module.exports = function (app, connection, log) {
                     });
 
                     // handle any updates for stuff that did previously exist
-                    existingConfigNames.forEach(existingConfigItemName => {
-                        const receivedIndex = _.findIndex(receivedConfigItems, (x) => x.configName === existingConfigItemName)
-                        if (receivedIndex >= 0) {
-                            if (receivedConfigItems[receivedIndex].configValueType === 'boolean') {
-                                receivedConfigItems[receivedIndex].configValue = String(receivedConfigItems[receivedIndex].configValue)
+                    if (existingConfigNames.length > 0) {
+                        existingConfigNames.forEach(existingConfigItemName => {
+                            const receivedIndex = _.findIndex(receivedConfigItems, (x) => x.configName === existingConfigItemName)
+                            if (receivedIndex >= 0) {
+                                if (receivedConfigItems[receivedIndex].configValueType === 'boolean') {
+                                    receivedConfigItems[receivedIndex].configValue = String(receivedConfigItems[receivedIndex].configValue)
+                                }
+                                _.set(updatedConfiguration, existingConfigItemName, receivedConfigItems[receivedIndex].configValue)
                             }
-                            _.set(updatedConfiguration, existingConfigItemName, receivedConfigItems[receivedIndex].configValue)
-                        }
-                    });
+                        });
 
-                    // add back anything that wasn't sent in (this matters for retailer configs that are set by Toshiba, which the retailer can't see or send)
-                    Object.entries(existingConfigurations).forEach(configItem => {
-                        const receivedIndex = _.findIndex(receivedConfigItems, (x) => x.configName === configItem[0])
-                        if (receivedIndex === -1) {
-                            _.set(updatedConfiguration, configItem[0], configItem[1])
-                        }
-                    });
+                        // add back anything that wasn't sent in (this matters for retailer configs that are set by Toshiba, which the retailer can't see or send)
+                        Object.entries(existingConfigurations).forEach(configItem => {
+                            const receivedIndex = _.findIndex(receivedConfigItems, (x) => x.configName === configItem[0])
+                            if (receivedIndex === -1) {
+                                _.set(updatedConfiguration, configItem[0], configItem[1])
+                            }
+                        });
+                    }
+
+
 
 
                     // DO UPDATE
@@ -1134,7 +1148,7 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/getRoleDetails', (req, res) => {
         var results = {}
         var userRoles = azureClient.db("pas_config").collection("user");
-        userRoles.find({ email: { '$regex': req.query.email, $options: 'i' }}).limit(1).toArray(function (err, result) {
+        userRoles.find({ email: { '$regex': req.query.email, $options: 'i' } }).limit(1).toArray(function (err, result) {
 
             if (err) {
                 const msg = { "error": err }
