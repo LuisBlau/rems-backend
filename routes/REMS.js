@@ -1183,6 +1183,18 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.get('/REMS/getAllUserDetails', (req, res) => {
+        var userDetails = azureClient.db("pas_config").collection("user");
+        userDetails.find().toArray(function (err, result) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            }
+            res.send(result)
+        });
+    });
+
     app.get('/REMS/getRetailerDetails', (req, res) => {
         var results = {}
         var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
