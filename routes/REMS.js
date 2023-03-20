@@ -11,8 +11,10 @@ const mongodb = require("mongodb")
 var { ObjectId } = require('mongodb')
 const { BlobServiceClient } = require('@azure/storage-blob');
 const extract = require('extract-zip')
+const apicache = require("apicache")
 require('dotenv').config()
 
+let cache = apicache.middleware
 // setup dirs
 var uploadDir = process.cwd() + "/uploads";
 
@@ -30,6 +32,14 @@ function sendRelevantJSON(res, jsonPath) {
             path.join(process.cwd(), 'Data', jsonPath)
         )
     ))
+}
+
+function deepEqual(x, y) {
+  return (x && y && typeof x === 'object' && typeof y === 'object') ?
+    (Object.keys(x).length === Object.keys(y).length) &&
+      Object.keys(x).reduce(function(isEqual, key) {
+        return isEqual && deepEqual(x[key], y[key]);
+      }, true) : (x === y);
 }
 
 /*
@@ -360,6 +370,56 @@ module.exports = function (app, connection, log) {
         azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "_id": req.query.id }, { "$set": { "archived": (req.query.archived == "true") } })
         res.send(200)
     })
+	app.get("/REMS/versionCombinations",cache("1 hour"), (req,res) => {
+		remsmap = {}
+		versions = []
+		query = {}
+		descriptionmap = {}
+		if(!req.query.allRetailers)
+			query["retailer_id"] = req.cookies["retailerId"]
+		azureClient.db("pas_software_distribution").collection("retailers").find(query).forEach(function(r) {
+			descriptionmap[r["retailer_id"]] = r["description"]
+		}).then(() => {
+		azureClient.db("pas_software_distribution").collection("rems").find(query).forEach(function(r) {
+			if(r["version"]) 
+				remsmap[r["retailer_id"]] = r["version"]
+		}).then(function () {
+			azureClient.db("pas_software_distribution").collection("agents").find(query).forEach(function(r) {
+				if(!remsmap[r["retailer_id"]]) {
+					return;
+				}
+				let rems = remsmap[r["retailer_id"]]
+				let rma = null
+				let cf = "2.1.2"
+				if(!r["versions"]) return
+				for(var v of r["versions"]) {
+					if(v["Remote Management Agent"]) {
+						rma = v["Remote Management Agent"]
+						break
+					}
+				}
+				if(!rma) return
+				versions.push({"rma":rma,"rems":rems,"cf": cf, "retailer": descriptionmap[r["retailer_id"]]})
+			}).then(function () {
+				let objCount = {}
+				for(var y of versions) {
+					if(!objCount[JSON.stringify(y)]) {
+						objCount[JSON.stringify(y)] = 1
+					} else {
+						objCount[JSON.stringify(y)] = objCount[JSON.stringify(y)] + 1
+					}
+				}
+				let newv = []
+				for(var o of Object.keys(objCount)) {
+					let newobj = JSON.parse(o)
+					newobj["count"] = objCount[o]
+					newv.push(newobj)
+				}
+				res.send(newv)
+			})
+		})
+		})
+		});
     app.post('/deploy-schedule', bodyParser.json(), (req, res) => {
         console.log("POST deploy-schedule received : ", req.body)
 
