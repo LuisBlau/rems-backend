@@ -916,16 +916,42 @@ module.exports = function (app, connection, log) {
         })
     });
 
-    app.post('/REMS/userManagementSubmission', bodyParser.json(), (request, response) => {
+    app.post('/REMS/userSettingsSubmission', bodyParser.json(), (request, response) => {
         let updateWasGood = true
         const receivedObject = request.body
-        const userQuery = { email: receivedObject.user.email }
-        const updateSet = { $set: { retailer: receivedObject.retailers }, $set: { role: receivedObject.roles } }
+        const userQuery = { email: receivedObject.email }
+        const updateSet = { $set: { firstName: receivedObject.firstName, lastName: receivedObject.lastName } }
 
         const userToUpdate = azureClient.db("pas_config").collection("user");
         userToUpdate.updateOne(userQuery, updateSet, function (error, updateResult) {
             if (error) {
                 console.log("Update error: ", error)
+                const msg = { "message": "Error updating retailer configuration" }
+                updateWasGood = false
+                response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                throw (error)
+            }
+            if (updateResult) {
+                const responseInfo =
+                    "User with email: " + receivedObject.email + " was updated to be " + receivedObject.firstName + " " + receivedObject.lastName
+                console.log("Update of user was SUCCESS : ", responseInfo)
+            }
+            if (updateWasGood) {
+                response.status(statusCode.OK).json({ "message": "SUCCESS" });
+                return
+            }
+        })
+    });
+
+    app.post('/REMS/userManagementSubmission', bodyParser.json(), (request, response) => {
+        let updateWasGood = true
+        const receivedObject = request.body
+        const userQuery = { email: receivedObject.user.email }
+        const updateSet = { $set: { retailer: receivedObject.retailers, role: receivedObject.roles } }
+
+        const userToUpdate = azureClient.db("pas_config").collection("user");
+        userToUpdate.updateOne(userQuery, updateSet, function (error, updateResult) {
+            if (error) {
                 console.log("Update error : ", error)
                 const msg = { "message": "Error updating retailer configuration" }
                 updateWasGood = false
