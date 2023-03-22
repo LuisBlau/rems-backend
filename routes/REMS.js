@@ -750,7 +750,14 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             } else {
                 const configurationData = result
-                retailers.find({ retailer_id: req.cookies["retailerId"] }, {}).toArray(function (err, retailerResult) {
+
+                let retailerId = ''
+                if (req.query?.retailerId !== undefined) {
+                    retailerId = req.query?.retailerId
+                } else {
+                    retailerId = req.cookies["retailerId"]
+                }
+                retailers.find({ retailer_id: retailerId }, {}).toArray(function (err, retailerResult) {
                     if (err) {
                         const msg = { "error": err }
                         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -792,11 +799,11 @@ module.exports = function (app, connection, log) {
     });
 
     app.post('/REMS/retailerConfigurationUpdate', bodyParser.json(), (request, response) => {
-        const retailerId = request.cookies["retailerId"]
+        const retailerId = request.query.retailerId
         const receivedConfigItems = []
         const updatedConfiguration = {}
 
-        const configQuery = { retailer_id: request.cookies["retailerId"] };
+        const configQuery = { retailer_id: retailerId };
         const configUpdate = { $set: { configuration: updatedConfiguration } }
 
         request.body.forEach(configItem => {
