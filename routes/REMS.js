@@ -366,8 +366,8 @@ module.exports = function (app, connection, log) {
         });
     });
     app.get("/REMS/setArchive", (req, res) => {
-        azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "_id": req.query.id }, { "$set": { "archived": (req.query.archived == "true") } })
-        res.send(200)
+        azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "_id": req.query.id }, { "$set": { "archived": (req.query.archived) } })
+        res.sendStatus(200)
     })
     app.get("/REMS/versionCombinations", cache("1 hour"), (req, res) => {
         remsmap = {}
