@@ -261,12 +261,11 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/uploads', (req, res) => {
         let results = []
-        let query = { retailer_id: req.cookies["retailerId"] }
+        let query = { retailer_id: req.query.retailerId }
         if (!(req.query?.archived)) query["archived"] = false
         var uploads = azureClient.db("pas_software_distribution").collection("uploads");
         uploads.find(query).toArray(function (err, result) {
             results = result;
-
             res.send(results)
         });
     });
