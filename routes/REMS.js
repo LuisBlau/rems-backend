@@ -1023,15 +1023,14 @@ module.exports = function (app, connection, log) {
         }
     });
 
-    app.post('/deploy-cancel', bodyParser.json(), (request, response) => {
+    app.post('/REMS/deploy-cancel', bodyParser.json(), (request, response) => {
         console.log("POST deploy-update received : ", request.body)
         const storeName = request.body.storeName;
         const id = request.body.id;
         const newStatus = "Cancel";
 
-        const deployQuery = { retailer_id: request.cookies["retailerId"], storeName: storeName, id: parseInt(id), status: { $in: ["initial", "Initial", "Pending", "pending"] } };
+        const deployQuery = { retailer_id: request.query.retailerId, storeName: storeName, id: parseInt(id), status: { $in: ["initial", "Initial", "Pending", "pending"] } };
         const deployUpdate = { $set: { status: newStatus } }
-
         const deploys = azureClient.db("pas_software_distribution").collection("deployments")
         deploys.updateOne(deployQuery, deployUpdate, function (error, upResult) {
             if (error) {
@@ -1039,26 +1038,23 @@ module.exports = function (app, connection, log) {
                 const msg = { "message": "Error Canceling Deployment" }
                 response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
                 throw (error)
-                return;
             }
 
             if (upResult) {
                 const responseInfo =
                     " [ store: " + storeName +
                     " id: " + id +
-                    " n: " + upResult.result.n +
-                    " nModified: " + upResult.result.nModified +
+                    " number modified: " + upResult.modifiedCount +
                     " ]"
 
-                if (upResult.result.n <= 0) {
-                    console.log("Cancel Deployment Find FAIL : ", responseInfo)
-                    const msg = { "message": "Unable to find that Deployment" }
-                    response.status(statusCode.NOT_FOUND).json(msg);
-                    return;
-                }
-                else if (upResult.result.nModified <= 0) {
+                if (upResult.modifiedCount <= 0) {
                     console.log("Cancel Deployment Modify FAIL : ", responseInfo)
                     const msg = { "message": "Unable to cancel that Deployment" }
+                    response.status(statusCode.NOT_MODIFIED).json(msg);
+                    return;
+                } else if (upResult.matchedCount <= 0) {
+                    console.log('Cancel Deployment did not find a match : ', responseInfo)
+                    const msg = { "message": "Unable to find deployment match to cancel" }
                     response.status(statusCode.NOT_MODIFIED).json(msg);
                     return;
                 }
@@ -1088,7 +1084,6 @@ module.exports = function (app, connection, log) {
             var sw = version_split[0]
             var version = version_split[1]
             var agents = await azureClient.db("pas_software_distribution").collection("agents").find({ "version": { "$elemMatch": { sw: version } } }).toArray()
-            console.log(agents)
             filters["agents"] = { "$in": agents }
         }
         storeList.find(filters).toArray(function (err, result) {
