@@ -651,7 +651,7 @@ module.exports = function (app, connection, log) {
         }
 
         var agents = azureClient.db("pas_software_distribution").collection("agents");
-        agents.find({ retailer_id: req.cookies["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
+        agents.find({ retailer_id: req.query["retailer"], ...filters }, {}).toArray(function (err, agentList) {
             if (err) {
                 const msg = { "error": err };
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
