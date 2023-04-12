@@ -365,10 +365,53 @@ module.exports = function (app, connection, log) {
             }
         });
     });
+
     app.get("/REMS/setArchive", (req, res) => {
         azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "_id": req.query.id }, { "$set": { "archived": (req.query.archived) } })
         res.sendStatus(200)
-    })
+    });
+
+    app.get("/REMS/versionsData", async (req, res) => {
+        try {
+            let data = {
+                rem: {},
+                agents: []
+            };
+            let query = {};
+            if (req.query.retailer_id) {
+                query["retailer_id"] = req.query.retailer_id;
+            }
+            let rem = await azureClient.db("pas_software_distribution")
+                .collection("rems")
+                .findOne(query);
+            data.rem = rem;
+            let agents = await azureClient.db("pas_software_distribution")
+                .collection("agents")
+                .find(query)
+                .toArray();
+            for (let i = 0; i < agents.length; i++) {
+                agents[i]['rma'] = '';
+                agents[i]['pas'] = '';
+                if (agents[i].versions && agents[i].versions.length > 0) {
+                    for (let version of agents[i].versions) {
+                        if (RegExp('Remote Management Agent').test(version.Name)) {
+                            agents[i]['rma'] = version.Version;
+                        }
+                    }
+                }
+                if (agents[i].status && agents[i].status.RMA) {
+                    agents[i]['pas'] = agents[i].status.RMA.Version;
+                }
+            }
+            data.agents = agents;
+
+            res.status(200).json(data);
+        } catch (e) {
+            console.log(e);
+            res.status(500).json({ 'error': e });
+        }
+    });
+
     app.get("/REMS/versionCombinations", cache("1 hour"), (req, res) => {
         remsmap = {}
         versions = []
