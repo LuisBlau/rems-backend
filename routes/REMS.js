@@ -336,14 +336,10 @@ module.exports = function (app, connection, log) {
         });
     });
 
-    app.post('/REMS/get-deploys', (req, res) => {
-
-    });
-
     app.get('/REMS/deploy-configs', (req, res) => {
         var results = [];
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        configs.find({ retailer_id: req.cookies["retailerId"], name: { $ne: "Missing name" } }).toArray(function (err, result) {
+        configs.find({ retailer_id: req.query["retailerId"], name: { $ne: "Missing name" } }).toArray(function (err, result) {
             results = result;
             res.send(results);
         });
