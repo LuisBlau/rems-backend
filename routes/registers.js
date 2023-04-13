@@ -324,7 +324,7 @@ module.exports = function (app, connection, log) {
         "dataCapture": req.body["dataCapture"]
       }
     };
-    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    const sender = sbClient.createSender(req.query["retailerId"].toLowerCase());
     res.send(sender.sendMessages(msgSent));
   })
 

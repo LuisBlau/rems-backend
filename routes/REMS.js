@@ -124,7 +124,7 @@ module.exports = function (app, connection, log) {
     })
 
     app.post("/REMS/uploadfile", async (req, res) => {
-        const retailerId = req.cookies["retailerId"]
+        const retailerId = req.query["retailerId"]
         const allowedExtensions = [".zip", ".upload"];
         var form = new multiparty.Form();
         var filename;
