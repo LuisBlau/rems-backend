@@ -330,7 +330,7 @@ module.exports = function (app, connection, log) {
         if (req.query.status && "All" !== req.query.status) filters.status = req.query.status;
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         //deploys.find({ retailer_id: retailerId, status: { $ne: "Succeeded" } }).toArray(function (err, result) {
-        deploys.find({ retailer_id: req.cookies["retailerId"], ...filters }).sort({ id: -1 }).limit(maxRecords).toArray(function (err, result) {
+        deploys.find({ retailer_id: req.query["retailerId"], ...filters }).sort({ id: -1 }).limit(maxRecords).toArray(function (err, result) {
             results = result;
             res.send(results)
         });
