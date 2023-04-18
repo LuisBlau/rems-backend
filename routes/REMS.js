@@ -275,7 +275,7 @@ module.exports = function (app, connection, log) {
         })
     })
     app.post('/sendCommand', bodyParser.json(), (req, res) => {
-        const retailerId = req.cookies["retailerId"]
+        const retailerId = req.query["retailerId"]
         //query biggest index
         var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
         var results = [];
