@@ -347,7 +347,7 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/delete-deploy-config', (req, res) => {
         var id = req.query.id;
-        var dbQuery = { retailer_id: req.cookies["retailerId"], id: parseInt(id) };
+        var dbQuery = { retailer_id: req.query["retailerId"], id: parseInt(id) };
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
         configs.deleteOne(dbQuery, function (err, result) {
             if (err) {
@@ -414,7 +414,7 @@ module.exports = function (app, connection, log) {
         query = {}
         descriptionmap = {}
         if (!req.query.allRetailers)
-            query["retailer_id"] = req.cookies["retailerId"]
+            query["retailer_id"] = req.query["retailerId"]
         azureClient.db("pas_software_distribution").collection("retailers").find(query).forEach(function (r) {
             descriptionmap[r["retailer_id"]] = r["description"]
         }).then(() => {
@@ -464,11 +464,11 @@ module.exports = function (app, connection, log) {
         const dateTime = req.body["dateTime"];
         const name = req.body.name
         const id = req.body.id
-        const retailer_id = req.cookies["retailerId"]
+        const retailer_id = req.query["retailerId"]
         let storeList = req.body.storeList
 
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        configs.findOne({ retailer_id: req.cookies["retailerId"], name: name, id: id }, function (err, config) {
+        configs.findOne({ retailer_id: retailer_id, name: name, id: id }, function (err, config) {
 
             if (err) {
                 const msg = { "error": err }
@@ -599,36 +599,6 @@ module.exports = function (app, connection, log) {
         }) // config lookup from database
     });
 
-    app.get('/REMS/heartbeat', (req, res) => {
-        console.log("Get /REMS/heartbeat received : ", req.query)
-        var results = []
-        let filters = {}
-
-        if (req.query.Store !== undefined) {
-            console.log("Heartbeat search with store " + req.query.Store)
-            filters.storeName = req.query.Store;
-        }
-        if (req.query.System !== undefined) {
-            console.log("Heartbeat search with System/agent " + req.query.System)
-            filters.systemName = req.query.System;
-        }
-
-        const heartbeat = azureClient.db("pas_availability").collection("heartbeat");
-        heartbeat.find({ Retailer: req.cookies["retailerId"], ...filters }).toArray(function (err, result) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else if (!result) {
-                const msg = { "message": "Heartbeat: Error reading from server" }
-                res.status(statusCode.NO_CONTENT).json(msg);
-            } else {
-                results = result;
-                res.send(results)
-            }
-        })
-    });
-
     app.get('/REMS/stores/alerts', (req, res) => {
         console.log("Get /REMS/stores/alerts received : ", req.query)
 
@@ -653,11 +623,9 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/rems', (req, res) => {
         console.log("Get /REMS/rems received : ", req.query)
-        var results = [];
-        let filters = {}
 
         const agents = azureClient.db("pas_software_distribution").collection("rems");
-        agents.find({ retailer_id: req.cookies["retailerId"] }, {}).toArray(function (err, rems) {
+        agents.find({ retailer_id: req.query["retailerId"] }, {}).toArray(function (err, rems) {
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -793,7 +761,7 @@ module.exports = function (app, connection, log) {
                 if (req.query?.retailerId !== undefined) {
                     retailerId = req.query?.retailerId
                 } else {
-                    retailerId = req.cookies["retailerId"]
+                    res.status(statusCode.INTERNAL_SERVER_ERROR).json('Somehow no retailer id sent')
                 }
                 retailers.find({ retailer_id: retailerId }, {}).toArray(function (err, retailerResult) {
                     if (err) {
@@ -1114,10 +1082,8 @@ module.exports = function (app, connection, log) {
     app.get('/REMS/store-list', async (req, res) => {
         var results = []
 
-        console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"] }));
-
         var storeList = azureClient.db("pas_software_distribution").collection("store-list");
-        filters = { retailer_id: req.cookies["retailerId"] }
+        let filters = { retailer_id: req.query["retailerId"] }
         if (req.query["version"]) {
             var version_split = req.query["version"].split("\n")
             var sw = version_split[0]
@@ -1144,17 +1110,14 @@ module.exports = function (app, connection, log) {
     });
 
     app.get('/REMS/agentScreenShot', (req, res) => {
-        var results = []
         let filters = {}
         if (req.query.storeName) filters.storeName = req.query.storeName;
         if (req.query.agentName) filters.agentName = req.query.agentName;
 
         console.log("agentScreenShot " + JSON.stringify(filters));
-        console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"], ...filters }));
 
         var deploys = azureClient.db("pas_software_distribution").collection("agent-screenshot");
-
-        deploys.find({ retailer_id: req.cookies["retailerId"], ...filters }).toArray(function (err, result) {
+        deploys.find({ retailer_id: req.query["retailerId"], ...filters }).toArray(function (err, result) {
 
             if (err) {
                 const msg = { "error": err }
@@ -1171,45 +1134,13 @@ module.exports = function (app, connection, log) {
         });
     });
 
-
-    app.get('/REMS/specific-store-agent-names', (req, res) => {
-        var results = []
-        let filters = {}
-        var maxRecords = 0;
-        if (req.query.storeId) filters.id = req.query.storeId;
-
-        console.log(JSON.stringify({ retailer_id: req.cookies["retailerId"], ...filters }));
-
-        var deploys = azureClient.db("pas_software_distribution").collection("store-list");
-
-        deploys.find({ retailer_id: req.cookies["retailerId"], ...filters }).toArray(function (err, result) {
-
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                res.send();
-            } else if (!result) {
-                const msg = { "message": "No store available for this retailer" }
-                res.status(statusCode.NO_CONTENT).json(msg);
-                res.send();
-            } else {
-                result.forEach(function (item) {
-                    results = results.concat(item.agents);
-                });
-                res.send(results)
-            }
-
-        });
-    });
-
     app.post('/REMS/save-store-data', bodyParser.json(), (req, res) => {
         let filters = {};
         if (req.body.id) filters.id = req.body.id;
 
         //query biggest index
         var deployConfig = azureClient.db("pas_software_distribution").collection("store-list");
-        var results = [];
-        deployConfig.find({ retailer_id: req.cookies["retailerId"], ...filter }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
+        deployConfig.find({ retailer_id: req.query["retailerId"], ...filter }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
 
             if (err_find) {
                 const msg = { "error": err_find }
@@ -1219,7 +1150,7 @@ module.exports = function (app, connection, log) {
 
             if (req.body.id) {
 
-                const storeListUpdateQuery = { retailer_id: req.cookies["retailerId"], list_name: req.body.list_name, id: req.body.id };
+                const storeListUpdateQuery = { retailer_id: req.query["retailerId"], list_name: req.body.list_name, id: req.body.id };
                 const storeListUpdateAgent = { $set: { agents: req.body.agents } }
 
                 deployConfig.updateOne(storeListUpdateQuery, storeListUpdateAgent, function (err, res) {
@@ -1241,7 +1172,7 @@ module.exports = function (app, connection, log) {
                 var toInsert = {
                     id: index.toString(),
                     list_name: req.body.list_name,
-                    retailer_id: req.cookies["retailerId"],
+                    retailer_id: req.query["retailerId"],
                     agents: []
                 }
 
@@ -1282,7 +1213,7 @@ module.exports = function (app, connection, log) {
         });
     });
     app.get("/REMS/stores", (req, res) => {
-        agents.find({ "retailer_id": req.cookies["retailerId"] }).toArray(function (err, rems) {
+        agents.find({ "retailer_id": req.query["retailerId"] }).toArray(function (err, rems) {
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
