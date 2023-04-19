@@ -343,7 +343,7 @@ module.exports = function (app, connection, log) {
     var results = []
     var snapshots = azureClient.db("pas_reloads").collection("captures");
 
-    snapshots.find({ "Retailer": req.cookies["retailerId"] }).toArray(function (err, result) {
+    snapshots.find({ "Retailer": req.query["retailerId"] }).toArray(function (err, result) {
       results = result;
       let modifiedResults = []
       for (var x of results) {
@@ -365,20 +365,6 @@ module.exports = function (app, connection, log) {
       }
       res.send(modifiedResults)
     });
-  });
-
-
-  app.get('/registers/captures/:string', (req, res) => {
-    j = JSON.parse(atob(req.params["string"]))
-    msgSent = {
-      "body": {
-        "retailer": j.Retailer,
-        "store": j.Store,
-        "filename": j.values.File
-      }
-    };
-    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
-    res.send(sender.sendMessages(msgSent));
   });
 
   app.get('/registers/remscapture/:string', (req, res) => {
