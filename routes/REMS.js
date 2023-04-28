@@ -12,6 +12,8 @@ var { ObjectId } = require('mongodb')
 const { BlobServiceClient } = require('@azure/storage-blob');
 const extract = require('extract-zip')
 const apicache = require("apicache")
+var jwt = require('jsonwebtoken');
+const { v1: uuidv1 } = require('uuid');
 require('dotenv').config()
 
 let cache = apicache.middleware
@@ -274,6 +276,42 @@ module.exports = function (app, connection, log) {
             res.sendStatus(200)
         })
     })
+
+    app.get("/REMS/getTableauJwt", (req, res) => {
+        var retailers = azureClient.db("pas_software_distribution").collection("retailers");
+        let username = ''
+        retailers.find({ "retailer_id": req.query.retailerId }).toArray(function (err, result) {
+            if (result[0]["configuration"]["retailerTableauEmail"]) {
+                username = result[0]["configuration"]["retailerTableauEmail"]
+            }
+        });
+        const uuid = uuidv1();
+        const timenow = new Date().getTime();
+        const expiry = new Date().getTime() + (5 * 60 * 1000);
+        if (username === '') {
+            username = 'tgcs_pas_con_apps@toshibagcs.com'
+        }
+        var token = jwt.sign({
+            iss: process.env.CONNECTED_APP_CLIENT_ID,
+            sub: username,
+            aud: "tableau",
+            exp: expiry / 1000,
+            iat: timenow / 1000,
+            jti: uuid,
+            scp: ["tableau:views:embed", "tableau:metrics:embed"]
+        },
+            process.env.CONNECTED_APP_SECRET_VALUE,
+            {
+                algorithm: 'HS256',
+                header: {
+                    'kid': process.env.CONNECTED_APP_SECRET_ID,
+                    'iss': process.env.CONNECTED_APP_CLIENT_ID
+                }
+            }
+        );
+        res.send(token);
+    })
+
     app.post('/sendCommand', bodyParser.json(), (req, res) => {
         const retailerId = req.query["retailerId"]
         //query biggest index
