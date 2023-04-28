@@ -933,7 +933,7 @@ module.exports = function (app, connection, log) {
         let updateWasGood = true
         const receivedObject = request.body
         const userQuery = { email: receivedObject.email }
-        const updateSet = { $set: { firstName: receivedObject.firstName, lastName: receivedObject.lastName } }
+        const updateSet = { $set: { firstName: receivedObject.firstName, lastName: receivedObject.lastName, userDefinedMapConfig: receivedObject.userDefinedMapConfig } }
 
         const userToUpdate = azureClient.db("pas_config").collection("user");
         userToUpdate.updateOne(userQuery, updateSet, function (error, updateResult) {
