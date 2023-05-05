@@ -778,10 +778,10 @@ module.exports = function (app, connection, log) {
         let query = null
         if (req.query.isAdmin === 'true') {
             query = { configType: 'retailer' }
-            console.log(query)
-        } else {
+        } else if (req.query.ccv === 'true') {
             query = { configType: 'retailer', toshibaOnly: false }
-            console.log(query)
+        } else {
+            query = { configType: 'retailer', toshibaOnly: false, commandCenterOnly: false }
         }
 
         configurations.find(query).toArray(function (err, result) {
@@ -820,7 +820,8 @@ module.exports = function (app, connection, log) {
                                     configName: config.configName,
                                     configValue: retailerResult[0].configuration[config.configName],
                                     configValueType: config.configValueType,
-                                    configDisplay: config.configDisplay
+                                    configDisplay: config.configDisplay,
+                                    configCategory: config.configCategory
                                 }
                                 _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
                             } else {
@@ -829,7 +830,8 @@ module.exports = function (app, connection, log) {
                                     configName: config.configName,
                                     configValue: config.configDefaultValue,
                                     configValueType: config.configValueType,
-                                    configDisplay: config.configDisplay
+                                    configDisplay: config.configDisplay,
+                                    configCategory: config.configCategory
                                 }
                                 _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
                             }
@@ -849,7 +851,7 @@ module.exports = function (app, connection, log) {
 
         const configQuery = { retailer_id: retailerId };
         const configUpdate = { $set: { configuration: updatedConfiguration } }
-
+        console.log(request.body)
         request.body.forEach(configItem => {
             receivedConfigItems.push(configItem)
         });
@@ -956,7 +958,8 @@ module.exports = function (app, connection, log) {
                         configName: config.configName,
                         configValue: config.configDefaultValue,
                         configValueType: config.configValueType,
-                        configDisplay: config.configDisplay
+                        configDisplay: config.configDisplay,
+                        configCategory: config.configCategory
                     }
                     _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
                 });
