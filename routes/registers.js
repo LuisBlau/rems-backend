@@ -367,6 +367,19 @@ module.exports = function (app, connection, log) {
     });
   });
 
+  app.get('/registers/captures/:string', (req, res) => {
+    j = JSON.parse(atob(req.params["string"]))
+    msgSent = {
+      "body": {
+        "retailer": j.Retailer,
+        "store": j.Store,
+        "filename": j.values.File
+      }
+    };
+    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    res.send(sender.sendMessages(msgSent));
+  });
+
   app.get('/registers/remscapture/:string', (req, res) => {
     j = JSON.parse(atob(req.params["string"]))
     msgSent = {
