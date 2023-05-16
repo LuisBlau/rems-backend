@@ -406,6 +406,18 @@ module.exports = function (app, connection, log) {
     res.send(sender.sendMessages(msgSent));
   });
 
+  app.get("/registers/installPas", bodyParser.json(), (req, res) => {
+    msgSent = {
+      "body": {
+        "retailer": req.query.retailer_id,
+        "store": req.query.store,
+        "agent": req.query.agent,
+        "Install": "PAS"
+      }
+    };
+    const sender = sbClient.createSender(req.query["retailer_id"].toLowerCase());
+    res.send(sender.sendMessages(msgSent));
+  })
 
 }
 
