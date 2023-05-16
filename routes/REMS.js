@@ -376,11 +376,20 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/deploy-configs', (req, res) => {
         var results = [];
+        var retailer_id = req.query["retailerId"]?.split(',');
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        configs.find({ retailer_id: req.query["retailerId"], name: { $ne: "Missing name" } }).toArray(function (err, result) {
-            results = result;
-            res.send(results);
-        });
+        if (retailer_id?.length > 0) {
+            configs.find({ retailer_id: { $in: retailer_id }, name: { $ne: "Missing name" } }).toArray(function (err, result) {
+                results = result;
+                res.send(results);
+            });
+        } else {
+            configs.find({ name: { $ne: "Missing name" } }).toArray(function (err, result) {
+                results = result;
+                res.send(results);
+            });
+        }
+
     });
 
     app.get('/REMS/delete-deploy-config', (req, res) => {
@@ -502,8 +511,9 @@ module.exports = function (app, connection, log) {
         const dateTime = req.body["dateTime"];
         const name = req.body.name
         const id = req.body.id
-        const retailer_id = req.query["retailerId"]
+        const selected_retailer_id = req.query["retailerId"]
         let storeList = req.body.storeList
+        const retailer_id = req.body["retailerId"]
 
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
         configs.findOne({ retailer_id: retailer_id, name: name, id: id }, function (err, config) {
@@ -520,7 +530,7 @@ module.exports = function (app, connection, log) {
             else {
                 var record = {};
                 record.id = 0
-                record.retailer_id = config.retailer_id;
+                record.retailer_id = selected_retailer_id;
                 record.config_id = config.id
                 record.apply_time = dateTime;
                 record.storeName = "";
