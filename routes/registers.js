@@ -27,7 +27,7 @@ module.exports = function (app, connection, log) {
   app.post('/sendSNMPRequest', bodyParser.json(), (req, res) => {
     console.log("New SNMP Request set");
     console.log(JSON.stringify(req.body))
-    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    const sender = sbClient.createSender(req.body["retailer"].toLowerCase());
     res.send(sender.sendMessages({ "body": req.body }));
   })
   app.get('/registers/assets', (req, res) => {
@@ -60,7 +60,8 @@ module.exports = function (app, connection, log) {
     if (req.query["sName"] != undefined && req.query["aName"] != undefined) {
       snmpDatabase.findOne({
         storeName: req.query["sName"],
-        agentName: req.query["aName"]
+        agentName: req.query["aName"],
+        Retailer: req.query["retailerId"]
       }, function (err, result) {
         if (err || result === null) {
           log.info(`GET store: ${req.query["sName"]} and agent: ${req.query["aName"]}`);
@@ -120,14 +121,26 @@ module.exports = function (app, connection, log) {
 
   app.get("/registers/versions", async (req, res) => {
     let versions = {}
-    let docs = await azureClient.db("pas_software_distribution").collection("agents").distinct("versions", { "retailer_id": req.cookies["retailerId"] })
-    for (var y of docs) {
-      if (!versions[Object.keys(y)[0]]) versions[Object.keys(y)[0]] = []
-      if (versions[Object.keys(y)[0]].indexOf(y[Object.keys(y)[0]]) == -1) {
-        versions[Object.keys(y)[0]].push(y[Object.keys(y)[0]])
+    if (req.query["tenantId"] === undefined) {
+      let docs = await azureClient.db("pas_software_distribution").collection("agents").distinct("versions", { "retailer_id": req.query["retailerId"] })
+      for (var y of docs) {
+        if (!versions[Object.keys(y)[0]]) versions[Object.keys(y)[0]] = []
+        if (versions[Object.keys(y)[0]].indexOf(y[Object.keys(y)[0]]) == -1) {
+          versions[Object.keys(y)[0]].push(y[Object.keys(y)[0]])
+        }
       }
+      res.send(versions)
+    } else {
+      let docs = await azureClient.db("pas_software_distribution").collection("agents").distinct("versions", { "retailer_id": req.query["retailerId"], "tenant_id": req.query["tenantId"] })
+      for (var y of docs) {
+        if (!versions[Object.keys(y)[0]]) versions[Object.keys(y)[0]] = []
+        if (versions[Object.keys(y)[0]].indexOf(y[Object.keys(y)[0]]) == -1) {
+          versions[Object.keys(y)[0]].push(y[Object.keys(y)[0]])
+        }
+      }
+      res.send(versions)
     }
-    res.send(versions)
+
   })
 
   app.get('/registers/pinpad', (req, res) => {
@@ -180,62 +193,120 @@ module.exports = function (app, connection, log) {
       })
   })
   app.get('/registers/extracts', (req, res) => {
-    console.log("Extracts - " + req.cookies["retailerId"])
-    var results = []
-    var snapshots = azureClient.db("pas_reloads").collection("extracts");
-    let query = { "Retailer": req.cookies["retailerId"] }
-    if ("Store" in req.query) query["Store"] = req.query["Store"]
-    snapshots.find(query).toArray(function (err, result) {
-      results = result;
-      let modifiedResults = []
-      for (var x of results) {
-        var y = x
-        y["InStore"] = x["location"]["Store"]
-        y["Download"] = x["location"]["URL"]
-        y["Version"] = x["values"]["Version"]
-        y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-        y["ExtractType"] = x["values"]["ExtractType"]
-        y["State"] = x["values"]["State"]
-        y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
-        modifiedResults.push(y)
-      }
-      res.send(modifiedResults)
-    });
+    console.log("get /registers/extracts with: ", req.query)
+    if (req.query["tenantId"] === null) {
+      var results = []
+      var snapshots = azureClient.db("pas_reloads").collection("extracts");
+      let query = { "Retailer": req.query["retailerId"] }
+      if ("Store" in req.query) query["Store"] = req.query["Store"]
+      snapshots.find(query).toArray(function (err, result) {
+        results = result;
+        let modifiedResults = []
+        for (var x of results) {
+          var y = x
+          y["InStore"] = x["location"]["Store"]
+          y["Download"] = x["location"]["URL"]
+          y["Version"] = x["values"]["Version"]
+          y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+          y["ExtractType"] = x["values"]["ExtractType"]
+          y["State"] = x["values"]["State"]
+          y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
+          modifiedResults.push(y)
+        }
+        res.send(modifiedResults)
+      });
+    } else {
+      var results = []
+      var snapshots = azureClient.db("pas_reloads").collection("extracts");
+      let query = { "Retailer": req.query["retailerId"], "Tenant": req.query["tenantId"] }
+      snapshots.find(query).toArray(function (err, result) {
+        results = result;
+        let modifiedResults = []
+        for (var x of results) {
+          var y = x
+          y["InStore"] = x["location"]["Store"]
+          y["Download"] = x["location"]["URL"]
+          y["Version"] = x["values"]["Version"]
+          y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+          y["ExtractType"] = x["values"]["ExtractType"]
+          y["State"] = x["values"]["State"]
+          y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
+          modifiedResults.push(y)
+        }
+        res.send(modifiedResults)
+      })
+    }
   });
   app.get('/registers/dumps', (req, res) => {
-    var results = []
-    var filter = { "Retailer": req.cookies["retailerId"] };
+    console.log('/registers/dumps called with: ', req.query)
+    if (req.query["tenantId"] === null) {
+      var results = []
+      var filter = { "Retailer": req.cookies["retailerId"] };
 
-    if (req.query["store"] != undefined && req.query["store"] != 'undefined') {
-      filter.Store = req.query['store']
-    }
-
-    var snapshots = azureClient.db("pas_reloads").collection("dumps");
-    let query = { "Retailer": req.cookies["retailerId"] }
-    if ("Store" in req.query) query["Store"] = req.query["Store"]
-    snapshots.find(query).toArray(function (err, result) {
-      results = result;
-      let modifiedResults = []
-      for (var x of results) {
-        var y = x
-
-        y["Download"] = x["location"]["URL"]
-        y["Version"] = x["values"]["Version"]
-        y["Reason"] = x["values"]["Reason"]
-        if (x["RegNum"]) {
-          y["System"] = "Register " + x["RegNum"]
-        } else {
-          y["System"] = x["values"]["Controller ID"]
-        }
-        y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-        y["ExtractType"] = x["values"]["ExtractType"]
-        y["State"] = x["values"]["State"]
-        y["Rids"] = x["values"]["rids"]
-
-        modifiedResults.push(y)
+      if (req.query["store"] != undefined && req.query["store"] != 'undefined') {
+        filter.Store = req.query['store']
       }
-      res.send(modifiedResults)
-    });
+
+      var snapshots = azureClient.db("pas_reloads").collection("dumps");
+      let query = { "Retailer": req.cookies["retailerId"] }
+      if ("Store" in req.query) query["Store"] = req.query["Store"]
+      snapshots.find(query).toArray(function (err, result) {
+        results = result;
+        let modifiedResults = []
+        for (var x of results) {
+          var y = x
+
+          y["Download"] = x["location"]["URL"]
+          y["Version"] = x["values"]["Version"]
+          y["Reason"] = x["values"]["Reason"]
+          if (x["RegNum"]) {
+            y["System"] = "Register " + x["RegNum"]
+          } else {
+            y["System"] = x["values"]["Controller ID"]
+          }
+          y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+          y["ExtractType"] = x["values"]["ExtractType"]
+          y["State"] = x["values"]["State"]
+          y["Rids"] = x["values"]["rids"]
+
+          modifiedResults.push(y)
+        }
+        res.send(modifiedResults)
+      });
+    } else {
+      var results = []
+      if (req.query["retailerId"] !== 'null') {
+        var filter = { "Retailer": req.query["retailerId"], "Tenant": req.query["tenantId"] };
+        if (req.query["store"] !== undefined && req.query["store"] !== 'undefined') {
+          filter.Store = req.query['store']
+        }
+
+        var snapshots = azureClient.db("pas_reloads").collection("dumps");
+        snapshots.find(filter).toArray(function (err, result) {
+          results = result;
+          let modifiedResults = []
+          for (var x of results) {
+            var y = x
+
+            y["Download"] = x["location"]["URL"]
+            y["Version"] = x["values"]["Version"]
+            y["Reason"] = x["values"]["Reason"]
+            if (x["RegNum"]) {
+              y["System"] = "Register " + x["RegNum"]
+            } else {
+              y["System"] = x["values"]["Controller ID"]
+            }
+            y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+            y["ExtractType"] = x["values"]["ExtractType"]
+            y["State"] = x["values"]["State"]
+            y["Rids"] = x["values"]["rids"]
+
+            modifiedResults.push(y)
+          }
+          res.send(modifiedResults)
+        });
+      }
+    }
   });
 
   app.get('/registers/dumpsForStore', (req, res) => {
@@ -340,31 +411,57 @@ module.exports = function (app, connection, log) {
   })
 
   app.get('/registers/captures', (req, res) => {
+    console.log('get registers/captures: ', req.query)
     var results = []
     var snapshots = azureClient.db("pas_reloads").collection("captures");
 
-    snapshots.find({ "Retailer": req.query["retailerId"] }).toArray(function (err, result) {
-      results = result;
-      let modifiedResults = []
-      for (var x of results) {
-        var y = x
+    if (req.query["tenantId"] === null) {
+      snapshots.find({ "Retailer": req.query["retailerId"] }).toArray(function (err, result) {
+        results = result;
+        let modifiedResults = []
+        for (var x of results) {
+          var y = x
 
-        y["Download"] = x["location"]["URL"]
-        y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-        y["CaptureType"] = x["values"]["CaptureType"]
-        if (x["values"]["Agent"]) {
-          y["Agent"] = x["values"]["Agent"]
-        } else {
-          y["Agent"] = "REMS"
+          y["Download"] = x["location"]["URL"]
+          y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+          y["CaptureType"] = x["values"]["CaptureType"]
+          if (x["values"]["Agent"]) {
+            y["Agent"] = x["values"]["Agent"]
+          } else {
+            y["Agent"] = "REMS"
+          }
+          if (!y["Store"])
+            y["Store"] = "REMS"
+          y["CaptureSource"] = x["values"]["CaptureSource"]
+
+          modifiedResults.push(y)
         }
-        if (!y["Store"])
-          y["Store"] = "REMS"
-        y["CaptureSource"] = x["values"]["CaptureSource"]
+        res.send(modifiedResults)
+      });
+    } else {
+      snapshots.find({ "Retailer": req.query["retailerId"], "Tenant": req.query["tenantId"] }).toArray(function (err, result) {
+        results = result;
+        let modifiedResults = []
+        for (var x of results) {
+          var y = x
 
-        modifiedResults.push(y)
-      }
-      res.send(modifiedResults)
-    });
+          y["Download"] = x["location"]["URL"]
+          y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+          y["CaptureType"] = x["values"]["CaptureType"]
+          if (x["values"]["Agent"]) {
+            y["Agent"] = x["values"]["Agent"]
+          } else {
+            y["Agent"] = "REMS"
+          }
+          if (!y["Store"])
+            y["Store"] = "REMS"
+          y["CaptureSource"] = x["values"]["CaptureSource"]
+
+          modifiedResults.push(y)
+        }
+        res.send(modifiedResults)
+      });
+    }
   });
 
   app.get('/registers/captures/:string', (req, res) => {
