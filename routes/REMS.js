@@ -507,6 +507,12 @@ module.exports = function (app, connection, log) {
                     for (let version of agents[i].versions) {
                         if (RegExp('Remote Management Agent').test(version.Name)) {
                             agents[i]['rma'] = version.Version;
+                        } else if (RegExp('Toshiba UnifiedPOS for Windows').test(version.Name)) {
+                            agents[i]['JavaPOS'] = version.Version;
+                        } else if (RegExp('Store Integrator').test(version.Name)) {
+                            agents[i]['SIGUI'] = version.Version;
+                        } else if (RegExp('Toshiba Checkout Environment for Consumer-Service Lane').test(version.Name)) {
+                            agents[i]['CHEC'] = version.Version;
                         }
                     }
                 }
