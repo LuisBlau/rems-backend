@@ -823,6 +823,43 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.get('/REMS/getContainerInformationForStoreAgent', (req, res) => {
+        console.log("Get /REMS/getContainerInformationForStoreAgent received : ", req.query);
+        if (req.query["tenantId"] === undefined) {
+            var agents = azureClient.db("pas_software_distribution").collection("agents")
+            agents.findOne({ retailer_id: req.query.retailerId, storeName: req.query.storeName, agentName: req.query.agentName }, function (err, agentDetails) {
+                if (err) {
+                    const msg = { "error": err };
+                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                    throw err;
+                } else if (!agentDetails) {
+                    const msg = { "message": "Agents: Error reading from server" };
+                    res.status(statusCode.NO_CONTENT).json(msg);
+                }
+                else {
+                    console.log("sending container info : ", agentDetails.status);
+                    res.status(statusCode.OK).json(agentDetails.status);
+                }
+            });
+        } else {
+            var agents = azureClient.db("pas_software_distribution").collection("agents");
+            agents.findOne({ retailer_id: req.query.retailerId, storeName: req.query.storeName, agentName: req.query.agentName, tenant_id: req.query.tenantId }, function (err, agentList) {
+                if (err) {
+                    const msg = { "error": err };
+                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                    throw err;
+                } else if (!agentDetails) {
+                    const msg = { "message": "Agents: Error reading from server" };
+                    res.status(statusCode.NO_CONTENT).json(msg);
+                }
+                else {
+                    console.log("sending container info : ", agentDetails.status);
+                    res.status(statusCode.OK).json(agentDetails.status);
+                }
+            });
+        }
+    });
+
     app.get('/REMS/agentsForStore', (req, res) => {
         console.log("Get /REMS/agentsForStore received : ", req.query);
         if (req.query["tenantId"] === undefined) {
