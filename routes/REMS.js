@@ -288,7 +288,7 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/uploads', (req, res) => {
         let results = []
-        let query = { retailer_id: req.query.retailerId }
+        let query = { retailer_id:{ $in: ['COMMON',req.query.retailerId]} }
         if (req.query["tenantId"] !== undefined) {
             query.tenant_id = req.query["tenantId"]
         }
