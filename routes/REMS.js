@@ -589,7 +589,7 @@ module.exports = function (app, connection, log) {
         let storeList = req.body.storeList
         const retailer_id = req.body["retailerId"]
         const tenant_id = req.body["tenantId"]
-
+        const variables = req.body["variables"]
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
         let filters = { retailer_id: retailer_id, name: name, id: id }
         if (tenant_id !== undefined) {
@@ -619,12 +619,15 @@ module.exports = function (app, connection, log) {
                 if (tenant_id !== undefined) {
                     record.tenant_id = tenant_id
                 }
-
                 for (const i in record.steps) {
+                    for(var v of Object.keys(record.steps[i])) {
+                       for(var k of Object.keys(variables)) {
+                           record.steps[i][v] = record.steps[i][v].replace(k,variables[k]);
+                       }
+                    }
                     record.steps[i].status = 'Initial'
                     record.steps[i].output = []
                 }
-
                 var newRecords = [];
                 var missingAgent = [];
                 const deployments = azureClient.db("pas_software_distribution").collection("deployments");
