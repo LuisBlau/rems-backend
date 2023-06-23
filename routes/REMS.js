@@ -245,6 +245,7 @@ module.exports = function (app, connection, log) {
                     if (req.query["tenantId" === undefined]) {
                         newFile = {
                             id: index,
+                            uuid:uuidv1(),
                             retailer_id: retailerId,
                             filename: filename,
                             inserted: currentdate.getTime(),
@@ -256,6 +257,7 @@ module.exports = function (app, connection, log) {
                     } else {
                         newFile = {
                             id: index,
+                            uuid:uuidv1(),
                             retailer_id: retailerId,
                             tenant_id: req.query["tenantId"],
                             filename: filename,
@@ -366,6 +368,7 @@ module.exports = function (app, connection, log) {
 
             var toInsert = {
                 id: index,
+                uuid: uuidv1(),
                 name: req.body.name,
                 retailer_id: retailerId,
                 steps: []
@@ -478,7 +481,7 @@ module.exports = function (app, connection, log) {
     });
 
     app.get("/REMS/setArchive", (req, res) => {
-        azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "_id": req.query.id }, { "$set": { "archived": (req.query.archived) } })
+        azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "uuid": req.query.uuid }, { "$set": { "archived": (req.query.archived) } })
         res.sendStatus(200)
     });
 
@@ -591,7 +594,7 @@ module.exports = function (app, connection, log) {
         const tenant_id = req.body["tenantId"]
         const variables = req.body["variables"]
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        let filters = { retailer_id: retailer_id, name: name, id: id }
+        let filters = { retailer_id: retailer_id, name: name, uuid: id }
         if (tenant_id !== undefined) {
             filters.tenant_id = tenant_id
         }
@@ -620,10 +623,10 @@ module.exports = function (app, connection, log) {
                     record.tenant_id = tenant_id
                 }
                 for (const i in record.steps) {
-                    for(var v of Object.keys(record.steps[i])) {
-                       for(var k of Object.keys(variables)) {
-                           record.steps[i][v] = record.steps[i][v].replace(k,variables[k]);
-                       }
+                    for (var v of Object.keys(record.steps[i])) {
+                        for (var k of Object.keys(variables)) {
+                            record.steps[i][v] = record.steps[i][v].replace(k, variables[k]);
+                        }
                     }
                     record.steps[i].status = 'Initial'
                     record.steps[i].output = []
