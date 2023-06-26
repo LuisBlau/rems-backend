@@ -14,6 +14,8 @@ const extract = require('extract-zip')
 const apicache = require("apicache")
 var jwt = require('jsonwebtoken');
 const { v1: uuidv1 } = require('uuid');
+const { version } = require('os');
+const { versions } = require('process');
 require('dotenv').config()
 
 let cache = apicache.middleware
@@ -529,36 +531,68 @@ module.exports = function (app, connection, log) {
         }
     });
 
-    app.get("/REMS/versionCombinations", cache("1 hour"), (req, res) => {
-        remsmap = {}
-        versions = []
-        query = {}
-        descriptionmap = {}
-        if (!req.query.allRetailers)
-            query["retailer_id"] = req.query["retailerId"]
-        azureClient.db("pas_software_distribution").collection("retailers").find(query).forEach(function (r) {
-            descriptionmap[r["retailer_id"]] = r["description"]
+    app.get("/REMS/versionCombinations", (req, res) => {
+        let query = {}
+        if (req.query["tenantId"] === undefined) {
+            if (req.query["allRetailers"] === 'false') {
+                query.retailer_id = req.query["retailerId"]
+            }
+        } else {
+            if (req.query["allRetailers"] === 'false') {
+                query.retailer_id = req.query["retailerId"]
+                query.tenant_id = req.query["tenantId"]
+            }
+        }
+        let remsmap = {}
+        let versions = []
+        let descriptionmap = {}
+
+        azureClient.db("pas_software_distribution").collection("retailers").find(query).forEach(function (retailer) {
+            descriptionmap[retailer["retailer_id"]] = retailer["description"]
         }).then(() => {
-            azureClient.db("pas_software_distribution").collection("rems").find(query).forEach(function (r) {
-                if (r["version"])
-                    remsmap[r["retailer_id"]] = r["version"]
+            azureClient.db("pas_software_distribution").collection("rems").find(query).forEach(function (rems) {
+                if (rems["version"]) {
+                    // sets the REMS version for the retailer in remsmap
+                    remsmap[rems["retailer_id"]] = rems["version"]
+                }
             }).then(function () {
-                azureClient.db("pas_software_distribution").collection("agents").find(query).forEach(function (r) {
-                    if (!remsmap[r["retailer_id"]]) {
+                azureClient.db("pas_software_distribution").collection("agents").find(query).forEach(function (agent) {
+                    if (!remsmap[agent["retailer_id"]]) {
                         return;
                     }
-                    let rems = remsmap[r["retailer_id"]]
+                    let rems = remsmap[agent["retailer_id"]]
                     let rma = null
                     let cf = "2.1.2"
-                    if (!r["versions"]) return
-                    for (var v of r["versions"]) {
-                        if (v["Remote Management Agent"]) {
-                            rma = v["Remote Management Agent"]
-                            break
+                    if (!agent["versions"]) return
+                    for (var v of agent["versions"]) {
+                        // check if the version object has "Name" and "Version" properties
+                        if (v["Name"] && v["Version"]) {
+                            // look for the Remote Management Agent (RMA) version
+                            if (v["Name"].includes("Remote Management Agent")) {
+                                let originalVersion = v["Version"]
+                                if (originalVersion.startsWith("R")) {
+                                    let splitVersion = originalVersion.split('-', [3]);
+                                    if (splitVersion.length >= 3) {
+                                        let extractedVersion = splitVersion[2].slice(0, 3);
+                                        let version = extractedVersion.split('').join('.');
+                                        rma = version ? version : null;
+                                        break;
+                                    }
+                                } else {
+                                    rma = originalVersion ? originalVersion : null;
+                                    break;
+                                }
+                            }
+                        }
+                        // check if the version object has "Remote Management Agent" as a key
+                        else if (v["Remote Management Agent"]) {
+                            let version = v["Remote Management Agent"];
+                            rma = version ? version : null;
+                            break;
                         }
                     }
                     if (!rma) return
-                    versions.push({ "rma": rma, "rems": rems, "cf": cf, "retailer": descriptionmap[r["retailer_id"]] })
+                    versions.push({ "rma": rma, "rems": rems, "cf": cf, "retailer": descriptionmap[agent["retailer_id"]] })
                 }).then(function () {
                     let objCount = {}
                     for (var y of versions) {
@@ -579,6 +613,7 @@ module.exports = function (app, connection, log) {
             })
         })
     });
+
     app.post('/deploy-schedule', bodyParser.json(), (req, res) => {
         console.log("POST deploy-schedule received : ", req.body)
 
@@ -899,6 +934,44 @@ module.exports = function (app, connection, log) {
             });
         }
     });
+
+    app.get('/REMS/allAgents', (req, res) => {
+        console.log("Get /REMS/allAgents received : ", req.query)
+
+        const retailers = azureClient.db("pas_software_distribution").collection("retailers");
+        const agents = azureClient.db("pas_software_distribution").collection("agents");
+
+        retailers.find().toArray(function (err, retailerList) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(500).json(msg);
+                throw err;
+            } else if (!retailerList) {
+                const msg = { "message": "Retailers: Error reading from server" }
+                res.status(204).json(msg);
+            } else {
+                console.log("Retrieved retailer list");
+
+                let retailerIds = retailerList.map(retailer => retailer.retailer_id);
+
+                agents.find({ retailer_id: { $in: retailerIds } }).toArray(function (err, agentList) {
+                    if (err) {
+                        const msg = { "error": err }
+                        res.status(500).json(msg);
+                        throw err;
+                    } else if (!agentList) {
+                        const msg = { "message": "Agents: Error reading from server" }
+                        res.status(204).json(msg);
+                    } else {
+                        console.log("Sending agentList : ", agentList);
+                        res.status(200).json(agentList);
+                    }
+                });
+            }
+        });
+    });
+
+
 
     app.get('/REMS/retrieveTenantParentAndDescription', (req, res) => {
         var retailers = azureClient.db("pas_software_distribution").collection("retailers");
