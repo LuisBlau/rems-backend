@@ -387,6 +387,7 @@ module.exports = function (app, connection, log) {
 
 
   app.post("/registers/requestDump/", bodyParser.json(), (req, res) => {
+    console.log('requestDump with: ', req.body, req.query)
     msgSent = {
       "body": {
         "retailer": req.body["retailerId"],

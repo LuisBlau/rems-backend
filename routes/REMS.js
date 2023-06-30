@@ -14,6 +14,7 @@ const extract = require('extract-zip')
 const apicache = require("apicache")
 var jwt = require('jsonwebtoken');
 const { v1: uuidv1 } = require('uuid');
+const sql = require('mssql');
 const { version } = require('os');
 const { versions } = require('process');
 require('dotenv').config()
@@ -28,7 +29,39 @@ var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUv
 azureClient.connect();
 /* cSpell:enable */
 
-//find retailer id
+
+//setup azure SQL connection
+const rsmpProdSqlConfig = {
+    user: 'tgcs-reader',
+    password: 'PophatrAjatU0r7wResT', //TODO: make this an env param
+    server: 'tgcspccsqlsvr.database.windows.net',
+    database: 'pcc-storedata-db',
+    authentication: {
+        type: 'default'
+    },
+    options: {
+        encrypt: true,
+        trustServerCertificate: false,
+        hostNameInCertificate: "*.database.windows.net",
+        loginTimeout: 30
+    }
+}
+
+const rsmpStagingSqlConfig = {
+    user: 'tgcs-reader',
+    password: 'nLrodReswlv4sPocruq5', //TODO: make this an env param
+    server: 'tgcs-pcc-staging.database.windows.net',
+    database: 'pcc-storedata-db',
+    authentication: {
+        type: 'default'
+    },
+    options: {
+        encrypt: true,
+        trustServerCertificate: false,
+        hostNameInCertificate: "*.database.windows.net",
+        loginTimeout: 30
+    }
+}
 
 function sendRelevantJSON(res, jsonPath) {
     res.send(JSON.parse(
@@ -126,6 +159,27 @@ module.exports = function (app, connection, log) {
 
         sendRelevantJSON(res, 'low_mem.json');
     })
+
+    app.get('/REMS/getRsmpAlerts', async (req, res) => {
+        console.log('getRsmpAlerts called with: ', req.query)
+        var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
+        retailerDetails.findOne({ retailer_id: req.query["retailerId"] }, async function (err, retailer) {
+            if (retailer) {
+                if (req.query["isLab"] === 'false') {
+                    console.log('in prod system: ', retailer.description)
+                    await sql.connect(rsmpProdSqlConfig)
+                    var alerts = await sql.query`select top 500 StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = ${retailer.description} and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`
+                    res.send(alerts.recordset)
+                } else if (req.query["isLab"] === 'true') {
+                    console.log('In lab system: ', retailer.description)
+                    await sql.connect(rsmpStagingSqlConfig)
+                    var alerts = await sql.query`select top 500 StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = ${retailer.description} and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`
+                    res.send(alerts.recordset)
+                }
+
+            }
+        })
+    });
 
     app.post("/REMS/uploadfile", async (req, res) => {
         const retailerId = req.query["retailerId"]
@@ -290,7 +344,7 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/uploads', (req, res) => {
         let results = []
-        let query = { retailer_id:{ $in: ['COMMON',req.query.retailerId]} }
+        let query = { retailer_id: { $in: ['COMMON', req.query.retailerId] } }
         if (req.query["tenantId"] !== undefined) {
             query.tenant_id = req.query["tenantId"]
         }
@@ -417,10 +471,10 @@ module.exports = function (app, connection, log) {
         if (req.query["tenantId"] !== undefined) {
             filters.tenant_id = req.query["tenantId"]
         }
-        if (req.query.store) filters.storeName = { $regex: ".*" + req.query.store + ".*" }
-        if (req.query.package && parseInt(req.query.package) > 0) filters.config_id = parseInt(req.query.package)
+        if (req.query.store) filters.agentName = { $regex: ".*" + req.query.store + ".*" }
+        if (req.query.package) filters.package = req.query.package
         if (req.query.records) maxRecords = parseInt(req.query.records);
-        if (req.query.status && "All" !== req.query.status) filters.status = req.query.status;
+        if (req.query.status) filters.status = req.query.status;
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         deploys.find({ retailer_id: req.query["retailerId"], ...filters }).sort({ id: -1 }).limit(maxRecords).toArray(function (err, result) {
             results = result;
@@ -482,6 +536,36 @@ module.exports = function (app, connection, log) {
     app.get("/REMS/setArchive", (req, res) => {
         azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "_id": req.query.id }, { "$set": { "archived": (req.query.archived) } })
         res.sendStatus(200)
+    });
+
+    app.get("/REMS/getAttendedLanes", (req, res) => {
+        console.log('getAttendedLanes called with: ', req.query)
+        let agents = azureClient.db("pas_software_distribution").collection("agents")
+        agents.find({ retailer_id: req.query["retailerId"] }).toArray(function (err, results) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                return;
+            } else if (results.length < 1) {
+                const msg = { "error": 'Error retrieving data from server' }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                return;
+            } else {
+                let agentsToSend = []
+                results.forEach(agent => {
+                    if (agent.status) {
+                        if (!_.includes(Object.keys(agent.status), "Controller")) {
+                            let agentTypes = ['SI Terminal', 'CHEC', 'Controller']
+                            agent.id = agent._id
+                            agent.type = agentTypes[Math.floor(Math.random() * agentTypes.length)];
+                            agentsToSend.push(agent)
+                        }
+                    }
+                });
+                res.status(200).json(agentsToSend)
+            }
+        })
+
     });
 
     app.get("/REMS/versionsData", async (req, res) => {
@@ -655,10 +739,10 @@ module.exports = function (app, connection, log) {
                     record.tenant_id = tenant_id
                 }
                 for (const i in record.steps) {
-                    for(var v of Object.keys(record.steps[i])) {
-                       for(var k of Object.keys(variables)) {
-                           record.steps[i][v] = record.steps[i][v].replace(k,variables[k]);
-                       }
+                    for (var v of Object.keys(record.steps[i])) {
+                        for (var k of Object.keys(variables)) {
+                            record.steps[i][v] = record.steps[i][v].replace(k, variables[k]);
+                        }
                     }
                     record.steps[i].status = 'Initial'
                     record.steps[i].output = []
@@ -907,8 +991,8 @@ module.exports = function (app, connection, log) {
                     const msg = { "error": err };
                     res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
                     throw err;
-                } else if (!agentList) {
-                    const msg = { "message": "Agents: Error reading from server" };
+                } else if (!agentList || agentList.length === 0) {
+                    const msg = { "message": "Agents: No agents found" };
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
