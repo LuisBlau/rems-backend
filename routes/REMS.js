@@ -483,6 +483,7 @@ module.exports = function (app, connection, log) {
     });
 
     app.get('/REMS/deploy-configs', (req, res) => {
+        console.log('deploy-configs called: ', req.query)
         var results = [];
         var retailer_id = req.query["retailerId"]?.split(',');
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
@@ -1530,6 +1531,7 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/store-list', async (req, res) => {
         var results = []
+        console.log('store-list with: ', req.query)
 
         var storeList = azureClient.db("pas_software_distribution").collection("store-list");
         let filters = { retailer_id: req.query["retailerId"] }

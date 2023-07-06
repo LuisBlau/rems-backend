@@ -390,7 +390,7 @@ module.exports = function (app, connection, log) {
     console.log('requestDump with: ', req.body, req.query)
     msgSent = {
       "body": {
-        "retailer": req.body["retailerId"],
+        "retailer": req.query["retailerId"],
         "store": req.body["storeName"],
         "agent": req.body["agent"],
         "dataCapture": req.body["dataCapture"]
