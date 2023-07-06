@@ -582,6 +582,9 @@ module.exports = function (app, connection, log) {
             let rem = await azureClient.db("pas_software_distribution")
                 .collection("rems")
                 .findOne(query);
+            if (req.query.tenant_id) {
+                query["tenant_id"] = req.query.tenant_id;
+            }
             data.rem = rem;
             let agents = await azureClient.db("pas_software_distribution")
                 .collection("agents")
