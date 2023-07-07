@@ -398,7 +398,7 @@ module.exports = function (app, connection, log) {
     })
 
     app.post('/sendCommand', bodyParser.json(), (req, res) => {
-        console.log('/sendCommand with: ', req.query)
+        console.log('/sendCommand with: ', req.query, req.body)
         const retailerId = req.query["retailerId"]
         //query biggest index
         var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
@@ -425,6 +425,16 @@ module.exports = function (app, connection, log) {
                 name: req.body.name,
                 retailer_id: retailerId,
                 steps: []
+            }
+
+            if (req.query.tenantId === 'common' || req.query.retailerId === 'common') {
+                toInsert = {
+                    id: index,
+                    name: req.body.name,
+                    retailer_id: retailerId,
+                    steps: [],
+                    forProd: req.body.forProd
+                }
             }
 
             if (req.query["tenantId"] !== undefined) {
