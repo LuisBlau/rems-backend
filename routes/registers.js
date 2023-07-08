@@ -391,6 +391,7 @@ module.exports = function (app, connection, log) {
     msgSent = {
       "body": {
         "retailer": req.query["retailerId"],
+        "tenant": req.query["tenantId"],
         "store": req.body["storeName"],
         "agent": req.body["agent"],
         "dataCapture": req.body["dataCapture"]
@@ -495,12 +496,13 @@ module.exports = function (app, connection, log) {
     msgSent = {
       "body": {
         "retailer": j.Retailer,
+        "tenant": j.Tenant,
         "store": j.Store,
         "agent": j.Agent,
         "command": j.Command
       }
     };
-    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    const sender = sbClient.createSender(j.Retailer.toLowerCase());
     res.send(sender.sendMessages(msgSent));
   });
 
