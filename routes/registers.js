@@ -381,7 +381,7 @@ module.exports = function (app, connection, log) {
         "filename": j.values.File
       }
     };
-    const sender = sbClient.createSender(req.query["retailerId"].toLowerCase());
+    const sender = sbClient.createSender(j.Retailer.toLowerCase());
     res.send(sender.sendMessages(msgSent));
   })
 
