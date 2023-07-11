@@ -343,17 +343,25 @@ module.exports = function (app, connection, log) {
 
 
     app.get('/REMS/uploads', (req, res) => {
-        let results = []
-        let query = { retailer_id: { $in: ['COMMON', req.query.retailerId] } }
+        let query = { retailer_id: req.query.retailerId }
         if (req.query["tenantId"] !== undefined) {
             query.tenant_id = req.query["tenantId"]
         }
+        var allUploads = []
+
         if (!(req.query?.archived)) query["archived"] = false
         var uploads = azureClient.db("pas_software_distribution").collection("uploads");
-        uploads.find(query).toArray(function (err, result) {
-            results = result;
-            res.send(results)
-        });
+        uploads.find(query).forEach(function (result) {
+            allUploads.push(result)
+        }).then(() => {
+            var uploads = azureClient.db("pas_software_distribution").collection("uploads");
+            query = { retailer_id: "COMMON" }
+            uploads.find(query).forEach(function (result) {
+                allUploads.push(result)
+            }).then(() => {
+                res.send(allUploads)
+            })
+        })
     });
 
     app.get("/REMS/deleteExistingList", (req, res) => {
