@@ -381,7 +381,7 @@ module.exports = function (app, connection, log) {
         "filename": j.values.File
       }
     };
-    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    const sender = sbClient.createSender(req.query["retailerId"].toLowerCase());
     res.send(sender.sendMessages(msgSent));
   })
 
@@ -475,7 +475,7 @@ module.exports = function (app, connection, log) {
         "filename": j.values.File
       }
     };
-    const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    const sender = sbClient.createSender(req.query["retailerId"].toLowerCase());
     res.send(sender.sendMessages(msgSent));
   });
 
