@@ -311,7 +311,13 @@ module.exports = function (app, connection, log) {
 
   app.get('/registers/dumpsForStore', (req, res) => {
     var snapshots = azureClient.db("pas_reloads").collection("dumps");
-    snapshots.find({ Retailer: req.query.retailerId, Store: req.query.storeName }).toArray(function (err, results) {
+    let query = {}
+    if (req.query["tenantId"] === undefined) {
+      query = { Retailer: req.query.retailerId, Store: req.query.storeName }
+    } else {
+      query = { Retailer: req.query.retailerId, Store: req.query.storeName, Tenant: req.query.tenantId }
+    }
+    snapshots.find(query).toArray(function (err, results) {
       if (err) {
         const msg = { "error": err }
         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -346,7 +352,13 @@ module.exports = function (app, connection, log) {
 
   app.get('/registers/extractsForStore', (req, res) => {
     var snapshots = azureClient.db("pas_reloads").collection("extracts");
-    snapshots.find({ Retailer: req.query.retailerId, Store: req.query.storeName }).toArray(function (err, results) {
+    let query = {}
+    if (req.query["tenantId"] === undefined) {
+      query = { Retailer: req.query.retailerId, Store: req.query.storeName }
+    } else {
+      query = { Retailer: req.query.retailerId, Store: req.query.storeName, Tenant: req.query.tenantId }
+    }
+    snapshots.find(query).toArray(function (err, results) {
       if (err) {
         const msg = { "error": err }
         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
