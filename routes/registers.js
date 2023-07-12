@@ -218,7 +218,7 @@ module.exports = function (app, connection, log) {
     } else {
       var results = []
       var snapshots = azureClient.db("pas_reloads").collection("extracts");
-      let query = { "Retailer": req.query["retailerId"], "Tenant": req.query["tenantId"] }
+      let query = { "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"] }
       snapshots.find(query).toArray(function (err, result) {
         results = result;
         let modifiedResults = []
@@ -276,7 +276,7 @@ module.exports = function (app, connection, log) {
     } else {
       var results = []
       if (req.query["retailerId"] !== 'null') {
-        var filter = { "Retailer": req.query["retailerId"], "Tenant": req.query["tenantId"] };
+        var filter = { "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"] };
         if (req.query["store"] !== undefined && req.query["store"] !== 'undefined') {
           filter.Store = req.query['store']
         }
@@ -373,6 +373,7 @@ module.exports = function (app, connection, log) {
   });
 
   app.get('/registers/extracts/:string', (req, res) => {
+    console.log('registers/extracts/:string called with: ', req.params)
     j = JSON.parse(atob(req.params["string"]))
     msgSent = {
       "body": {
@@ -441,7 +442,7 @@ module.exports = function (app, connection, log) {
         res.send(modifiedResults)
       });
     } else {
-      snapshots.find({ "Retailer": req.query["retailerId"], "Tenant": req.query["tenantId"] }).toArray(function (err, result) {
+      snapshots.find({ "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"] }).toArray(function (err, result) {
         results = result;
         let modifiedResults = []
         for (var x of results) {

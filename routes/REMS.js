@@ -301,7 +301,7 @@ module.exports = function (app, connection, log) {
                     if (req.query["tenantId" === undefined]) {
                         newFile = {
                             id: index,
-                            uuid:uuidv1(),
+                            uuid: uuidv1(),
                             retailer_id: retailerId,
                             filename: filename,
                             inserted: currentdate.getTime(),
@@ -313,7 +313,7 @@ module.exports = function (app, connection, log) {
                     } else {
                         newFile = {
                             id: index,
-                            uuid:uuidv1(),
+                            uuid: uuidv1(),
                             retailer_id: retailerId,
                             tenant_id: req.query["tenantId"],
                             filename: filename,
@@ -563,7 +563,13 @@ module.exports = function (app, connection, log) {
     app.get("/REMS/getAttendedLanes", (req, res) => {
         console.log('getAttendedLanes called with: ', req.query)
         let agents = azureClient.db("pas_software_distribution").collection("agents")
-        agents.find({ retailer_id: req.query["retailerId"] }).toArray(function (err, results) {
+        let query = {}
+        if (req.query["tenantId"] === undefined) {
+            query = { retailer_id: req.query["retailerId"] }
+        } else {
+            query = { retailer_id: req.query["retailerId"], tenant_id: req.query["tenantId"] }
+        }
+        agents.find(query).toArray(function (err, results) {
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
