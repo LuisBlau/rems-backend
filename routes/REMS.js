@@ -730,7 +730,7 @@ module.exports = function (app, connection, log) {
     });
 
     app.post('/deploy-schedule', bodyParser.json(), (req, res) => {
-        console.log("POST deploy-schedule received : ", req.body)
+        console.log("POST deploy-schedule received : ", req.body, req.query)
 
         const dateTime = req.body["dateTime"];
         const name = req.body.name
@@ -738,13 +738,11 @@ module.exports = function (app, connection, log) {
         const selected_retailer_id = req.query["retailerId"]
         let storeList = req.body.storeList
         const retailer_id = req.body["retailerId"]
-        const tenant_id = req.body["tenantId"]
+        const tenant_id = req.query["tenantId"]
         const variables = req.body["variables"]
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
         let filters = { retailer_id: retailer_id, name: name, uuid: id }
-        if (tenant_id !== undefined) {
-            filters.tenant_id = tenant_id
-        }
+
         configs.findOne(filters, function (err, config) {
             if (err) {
                 const msg = { "error": err }
