@@ -560,6 +560,11 @@ module.exports = function (app, connection, log) {
         res.sendStatus(200)
     });
 
+    app.get("/REMS/setForProd", (req, res) => {
+        azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "uuid": req.query.uuid }, { "$set": { "forProd": (req.query.forProd) } })
+        res.sendStatus(200)
+    });
+
     app.get("/REMS/getAttendedLanes", (req, res) => {
         console.log('getAttendedLanes called with: ', req.query)
         let agents = azureClient.db("pas_software_distribution").collection("agents")
