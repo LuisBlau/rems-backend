@@ -310,12 +310,13 @@ module.exports = function (app, connection, log) {
   });
 
   app.get('/registers/dumpsForStore', (req, res) => {
+    console.log('/registers/dumpsForStore with: ', req.query)
     var snapshots = azureClient.db("pas_reloads").collection("dumps");
     let query = {}
     if (req.query["tenantId"] === undefined) {
       query = { Retailer: req.query.retailerId, Store: req.query.storeName }
     } else {
-      query = { Retailer: req.query.retailerId, Store: req.query.storeName, Tenant: req.query.tenantId }
+      query = { Retailer: req.query.retailerId, Store: req.query.storeName, tenant_id: req.query.tenantId }
     }
     snapshots.find(query).toArray(function (err, results) {
       if (err) {
