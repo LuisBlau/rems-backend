@@ -416,6 +416,7 @@ module.exports = function (app, connection, log) {
   })
 
   app.post("/registers/requestRemsDump/", bodyParser.json(), (req, res) => {
+    console.log('registers/requestRemsDump with: ', req.body)
     msgSent = {
       "body": {
         "retailer": req.body['retailer'],
@@ -455,33 +456,49 @@ module.exports = function (app, connection, log) {
         res.send(modifiedResults)
       });
     } else {
-      snapshots.find({ "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"] }).toArray(function (err, result) {
-        results = result;
-        let modifiedResults = []
-        for (var x of results) {
-          var y = x
-
-          y["Download"] = x["location"]["URL"]
-          y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-          y["CaptureType"] = x["values"]["CaptureType"]
-          if (x["values"]["Agent"]) {
-            y["Agent"] = x["values"]["Agent"]
+      let modifiedResults = []
+      snapshots.find({ "Retailer": req.query["retailerId"] }).forEach(function (result) {
+        if (result.values.CaptureSource === 'REMS' && req.query["isAdmin"] === 'true') {
+          var y = result
+          y["Download"] = result["location"]["URL"]
+          y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
+          y["CaptureType"] = result["values"]["CaptureType"]
+          if (result["values"]["Agent"]) {
+            y["Agent"] = result["values"]["Agent"]
           } else {
             y["Agent"] = "REMS"
           }
           if (!y["Store"])
             y["Store"] = "REMS"
-          y["CaptureSource"] = x["values"]["CaptureSource"]
-
+          y["CaptureSource"] = result["values"]["CaptureSource"]
           modifiedResults.push(y)
         }
-        res.send(modifiedResults)
-      });
+      }).then(() => {
+        snapshots.find({ "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"] }).forEach(function (result) {
+          var y = result
+          y["Download"] = result["location"]["URL"]
+          y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
+          y["CaptureType"] = result["values"]["CaptureType"]
+          if (result["values"]["Agent"]) {
+            y["Agent"] = result["values"]["Agent"]
+          } else {
+            y["Agent"] = "REMS"
+          }
+          if (!y["Store"])
+            y["Store"] = "REMS"
+          y["CaptureSource"] = result["values"]["CaptureSource"]
+
+          modifiedResults.push(y)
+        }).then(() => {
+          res.send(modifiedResults)
+        })
+      })
     }
   });
 
   app.get('/registers/captures/:string', (req, res) => {
     j = JSON.parse(atob(req.params["string"]))
+    console.log('request file, registers/captures/:string - ', j)
     msgSent = {
       "body": {
         "retailer": j.Retailer,
