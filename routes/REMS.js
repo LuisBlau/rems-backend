@@ -257,11 +257,11 @@ module.exports = function (app, connection, log) {
 
             try {
                 let query
-                if (req.query["tenantId"] === undefined) {
-                    query = { retailer_id: retailerId };
-                } else {
-                    query = { retailer_id: retailerId, tenant_id: req.query["tenantId"] }
-                }
+                // if (req.query["tenantId"] === undefined) {
+                query = { retailer_id: retailerId };
+                // } else {
+                //     query = { retailer_id: retailerId, tenant_id: req.query["tenantId"] }
+                // }
 
                 const options = { sort: { "id": -1 } };
                 var results = [];
@@ -275,11 +275,11 @@ module.exports = function (app, connection, log) {
                     // increments the index
                     index++;
                     let azureFileName
-                    if (req.query["tenantId"] === undefined) {
-                        azureFileName = retailerId + "-" + index.toString() + ".upload";
-                    } else {
-                        azureFileName = req.query["tenantId"] + "-" + index.toString() + ".upload";
-                    }
+                    // if (req.query["tenantId"] === undefined) {
+                    azureFileName = retailerId + "-" + index.toString() + ".upload";
+                    // } else {
+                    // azureFileName = req.query["tenantId"] + "-" + index.toString() + ".upload";
+                    // }
                     const AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=pasfileuploads;AccountKey=6Wh7jcTvZYyAGyiyq7nZWcbZHZyNPDnrVLY6OgeDv3CmhRHDBdzWc8dAAgigrEZkxYFyQR2UJ6AO+ASt/Q2DQg==;EndpointSuffix=core.windows.net";
 
                     try {
