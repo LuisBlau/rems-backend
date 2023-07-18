@@ -17,6 +17,7 @@ const { v1: uuidv1 } = require('uuid');
 const sql = require('mssql');
 const { version } = require('os');
 const { versions } = require('process');
+let mssql = require('../middleware/mssql-pool-management')
 require('dotenv').config()
 
 let cache = apicache.middleware
@@ -160,23 +161,34 @@ module.exports = function (app, connection, log) {
         sendRelevantJSON(res, 'low_mem.json');
     })
 
-    app.get('/REMS/getRsmpAlerts', async (req, res) => {
+    app.get('/REMS/getRsmpAlerts', (req, res) => {
         console.log('getRsmpAlerts called with: ', req.query)
         var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
         retailerDetails.findOne({ retailer_id: req.query["retailerId"] }, async function (err, retailer) {
             if (retailer) {
                 if (req.query["isLab"] === 'false') {
                     console.log('in prod system: ', retailer.description)
-                    await sql.connect(rsmpProdSqlConfig)
-                    var alerts = await sql.query`select top 500 StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = ${retailer.description} and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`
-                    res.send(alerts.recordset)
+                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpProdSqlConfig)
+                    let request = new sql.Request(sqlPool)
+                    request.query(`select top 500 StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = '${retailer.description}' and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`, (err, results) => {
+                        if (err) {
+                            console.log('sql error', err)
+                        } else {
+                            res.send(results.recordset)
+                        }
+                    })
                 } else if (req.query["isLab"] === 'true') {
                     console.log('In lab system: ', retailer.description)
-                    await sql.connect(rsmpStagingSqlConfig)
-                    var alerts = await sql.query`select top 500 StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = ${retailer.description} and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`
-                    res.send(alerts.recordset)
+                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpStagingSqlConfig)
+                    let request = new sql.Request(sqlPool)
+                    request.query(`select top 500 StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = '${retailer.description}' and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`, (err, results) => {
+                        if (err) {
+                            console.log('sql error', err)
+                        } else {
+                            res.send(results.recordset)
+                        }
+                    })
                 }
-
             }
         })
     });
