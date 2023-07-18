@@ -357,7 +357,7 @@ module.exports = function (app, connection, log) {
     if (req.query["tenantId"] === undefined) {
       query = { Retailer: req.query.retailerId, Store: req.query.storeName }
     } else {
-      query = { Retailer: req.query.retailerId, Store: req.query.storeName, Tenant: req.query.tenantId }
+      query = { Retailer: req.query.retailerId, Store: req.query.storeName, tenant_id: req.query.tenantId }
     }
     snapshots.find(query).toArray(function (err, results) {
       if (err) {
