@@ -351,7 +351,7 @@ module.exports = function (app, connection, log) {
         }
         var allUploads = []
 
-        if (!(req.query?.archived)) query["archived"] = false
+        if (!(req.query?.archived)) query["archived"] = { $in: ['false', false] }
         var uploads = azureClient.db("pas_software_distribution").collection("uploads");
         uploads.find(query).forEach(function (result) {
             allUploads.push(result)
