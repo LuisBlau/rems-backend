@@ -6,7 +6,7 @@ const mongodb = require("mongodb")
 const mssql = require('mssql');
 const getAdbConnection = require("../assetdb")
 const { ServiceBusClient } = require("@azure/service-bus");
-const sbClient = new ServiceBusClient("Endpoint=sb://remscomm.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=Dk+TDFecPYBkRKtCqqudv1dnrN2hR5bcEN1t1alztOI=");
+const sbClient = new ServiceBusClient("Endpoint=sb://remscomm.servicebus.windows.net/;SharedAccessKeyName=dashboard-express;SharedAccessKey=v8rJ+T/HqTWa3OoWBvGlnWEBjyMBD0+7V+ASbL/Wluw=");
 var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
 function formatCount(resp) {

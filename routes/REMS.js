@@ -355,6 +355,26 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.get('/REMS/devices', (req, res) => {
+        let query = { retailer_id: req.query.retailerId }
+        if (req.query["tenantId"] !== undefined) {
+            query.tenant_id = req.query["tenantId"]
+        }
+
+        var devices = azureClient.db("pas_software_distribution").collection("devices");
+        devices.find(query).toArray(function (err, results) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+            } else if (results.length === 0) {
+                const msg = { "message": "Rems: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            } else {
+                res.status(statusCode.OK).json(results);
+            }
+        })
+    });
+
 
     app.get('/REMS/uploads', (req, res) => {
         let query = { retailer_id: req.query.retailerId }
