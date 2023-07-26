@@ -1246,7 +1246,67 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.post('/REMS/getSidebarConfiguration', bodyParser.json(), (req, res) => {
+        console.log('getSidebarConfiguration called with: ', req.body)
+        const configurations = azureClient.db("pas_config").collection("configurations");
+        const retailers = azureClient.db("pas_software_distribution").collection("retailers");
+        let query = { configType: 'retailer' }
+
+        configurations.find(query).toArray(function (err, result) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!result) {
+                const msg = { "message": "Config: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            } else {
+                const configurationData = result
+                retailers.find({ retailer_id: { $in: req.body.data } }).toArray(function (err, retailerResult) {
+                    if (err) {
+                        const msg = { "error": err }
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        throw err
+                    } else if (!result) {
+                        const msg = { "message": "Config: Error reading from server" }
+                        res.status(statusCode.NO_CONTENT).json(msg);
+                    } else {
+                        const configurationResponse = {}
+                        retailerResult.forEach(retailer => {
+                            configurationData.forEach((config, index) => {
+                                if (_.has(retailer.configuration, config.configName)) {
+                                    // add to response
+                                    let tempObj = {
+                                        configName: config.configName,
+                                        configValue: retailer.configuration[config.configName],
+                                        configValueType: config.configValueType,
+                                        configDisplay: config.configDisplay,
+                                        configCategory: config.configCategory
+                                    }
+                                    _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
+                                } else {
+                                    // add default to response
+                                    let tempObj = {
+                                        configName: config.configName,
+                                        configValue: config.configDefaultValue,
+                                        configValueType: config.configValueType,
+                                        configDisplay: config.configDisplay,
+                                        configCategory: config.configCategory
+                                    }
+                                    _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
+                                }
+                            });
+                        });
+                        console.log("Found retailer config data: ", retailerResult[0])
+                        res.status(statusCode.OK).json(configurationResponse);
+                    }
+                })
+            }
+        })
+    });
+
     app.get('/REMS/retailerConfiguration', (req, res) => {
+        console.log('retailerConfiguration called with: ', req.query)
         const configurations = azureClient.db("pas_config").collection("configurations");
         const retailers = azureClient.db("pas_software_distribution").collection("retailers");
         let query = null
