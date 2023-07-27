@@ -977,6 +977,26 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.get('/REMS/storeInfo', (req, res) => {
+        console.log("Get /REMS/storeInfo received : ", req.query)
+
+        const stores = azureClient.db("pas_software_distribution").collection("stores");
+        stores.find({ retailer_id: req.query["retailerId"], storeName: req.query["storeName"] }, {}).toArray(function (err, rems) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!rems) {
+                const msg = { "message": "Rems: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+                console.log("sending store info : ", rems)
+                res.status(statusCode.OK).json(rems);
+            }
+        });
+    });
+
     app.get('/REMS/agents', (req, res) => {
         console.log("Get /REMS/agents received : ", req.query);
         let filters = {}
