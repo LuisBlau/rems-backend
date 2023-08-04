@@ -170,7 +170,7 @@ module.exports = function (app, connection, log) {
                     console.log('in prod system: ', retailer.description)
                     let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpProdSqlConfig)
                     let request = new sql.Request(sqlPool)
-                    request.query(`select top 500 StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = '${retailer.description}' and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`, (err, results) => {
+                    request.query(`select StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = '${retailer.description}' and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`, (err, results) => {
                         if (err) {
                             console.log('sql error', err)
                         } else {
@@ -181,7 +181,7 @@ module.exports = function (app, connection, log) {
                     console.log('In lab system: ', retailer.description)
                     let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpStagingSqlConfig)
                     let request = new sql.Request(sqlPool)
-                    request.query(`select top 500 StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = '${retailer.description}' and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`, (err, results) => {
+                    request.query(`select StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = '${retailer.description}' and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`, (err, results) => {
                         if (err) {
                             console.log('sql error', err)
                         } else {
@@ -1822,27 +1822,6 @@ module.exports = function (app, connection, log) {
             }
             else {
                 output = rems.map(function (item) { return item.retailer_id; })
-                res.status(statusCode.OK).json(output);
-            }
-        });
-    });
-    app.get("/REMS/stores", (req, res) => {
-        let filters = { "retailer_id": req.query["retailerId"] }
-        if (req.query["tenantId"] !== undefined) {
-            filters.tenant_id = req.query["tenantId"]
-        }
-        agents.find(filters).toArray(function (err, rems) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else if (!rems) {
-                res.status(statusCode.NO_CONTENT).json(msg);
-            }
-            else {
-                output = []
-                for (x of rems)
-                    output.push(x.storeName)
                 res.status(statusCode.OK).json(output);
             }
         });
