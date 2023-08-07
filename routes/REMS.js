@@ -193,6 +193,35 @@ module.exports = function (app, connection, log) {
         })
     });
 
+    app.delete("/REMS/deletefile", bodyParser.json(), async (req, res) => {
+        console.log("Delete parmas received : ", req.body, req.query)
+
+        const retailerId = req.body?.retailerId;
+        const id = req.body?.id;
+
+        // Make sure id and retailerId are valid
+        if (!id || !retailerId) {
+            res.status(400).send({ error: "Bad request. id or retailerId is missing." });
+            return;
+        }
+
+        // Assuming the 'uploads' collection is where your file data is stored
+        const uploads = azureClient.db("pas_software_distribution").collection("uploads");
+
+        // Delete the document from MongoDB where retailer_id and id match
+        try {
+            const result = await uploads.deleteOne({ retailer_id: retailerId, id: id });
+            if (result.deletedCount === 1) {
+                res.status(200).send({ message: "Document successfully deleted from the database." });
+            } else {
+                res.status(404).send({ error: "Document not found in the database." });
+            }
+        } catch (error) {
+            res.status(500).send({ error: "An error occurred when trying to delete the document from the database." });
+            console.error(error);
+        }
+    });
+
     app.post("/REMS/uploadfile", async (req, res) => {
         const retailerId = req.query["retailerId"]
         const allowedExtensions = [".zip", ".upload"];
@@ -612,8 +641,8 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                 return;
             } else if (results.length < 1) {
-                const msg = { "error": 'Error retrieving data from server' }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                const msg = { "Message": 'No agents found', "Code": 204 }
+                res.status(200).json(msg);
                 return;
             } else {
                 let agentsToSend = []
