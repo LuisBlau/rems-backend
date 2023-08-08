@@ -1856,6 +1856,36 @@ module.exports = function (app, connection, log) {
         });
     });
 
+    app.post('/REMS/insertUser', (req, res) => {
+        console.log('/REMS/insertUser with: ', req.query)
+        var users = azureClient.db("pas_config").collection("user");
+        users.findOne({ email: req.query["userEmail"] }).then((result) => {
+            if (result !== null) {
+                const msg = { "error": 'User already exists!' }
+                res.status(statusCode.CONFLICT).json(msg)
+                res.send()
+            } else {
+                var newUserToInsert = {
+                    email: req.query["userEmail"],
+                    retailer: [],
+                    role: [],
+                    userDefinedMapConfig: ""
+                }
+                users.insertOne(newUserToInsert, function (err, result) {
+                    if (err) {
+                        const msg = { "error": err }
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        throw err;
+                    } else {
+                        const msg = { "message": "Success" }
+                        res.status(statusCode.OK).json(msg);
+                    }
+                    res.send()
+                })
+            }
+        })
+    })
+
     app.get('/REMS/getRoleDetails', (req, res) => {
         var results = {}
         var userRoles = azureClient.db("pas_config").collection("user");
