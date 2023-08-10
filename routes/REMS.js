@@ -193,6 +193,149 @@ module.exports = function (app, connection, log) {
         })
     });
 
+    app.get('/REMS/getRsmpMobileAssets', (req, res) => {
+        console.log('getRsmpMobileAssets called with: ', req.query)
+        var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
+        retailerDetails.findOne({ retailer_id: req.query["retailerId"] }, async function (err, retailer) {
+            if (retailer) {
+                if (req.query["isLab"] === 'false') {
+                    console.log('in prod system: ', retailer.description)
+                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpProdSqlConfig)
+                    let request = new sql.Request(sqlPool)
+                    request.query(` select 
+                    store.StoreNumber storeName,
+                    mobileAsset.StoreAssetId assetId, mobileAsset.IpAddress ipAddress, mobileAsset.MacAddress macAddress, mobileAsset.Model model, 
+                    mobileAsset.Manufacturer, mobileAsset.OsType, mobileAsset.OsVersion, mobileAsset.UpdatedTime updatedTime, opStatus.Status online
+                    from [store].[MobileAsset] mobileAsset
+                    left join [store].[Store] store
+                    on store.id = mobileAsset.storeId
+                    left join [store].[Brand] brand
+                    on brand.id = store.BrandId
+                    left join [store].[Retailer] retailer
+                    on brand.RetailerId = retailer.Id
+                    left join [store].[OperationalStatus] opStatus
+                    on mobileAsset.OperationalStatusId = opStatus.Id
+                    where retailer.name = '${retailer.description}'`, (err, results) => {
+                        if (err) {
+                            console.log('sql error', err)
+                        } else {
+                            res.send(results.recordset)
+                        }
+                    })
+                } else if (req.query["isLab"] === 'true') {
+                    console.log('In lab system: ', retailer.description)
+                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpStagingSqlConfig)
+                    let request = new sql.Request(sqlPool)
+                    request.query(` select 
+                    store.StoreNumber storeName,
+                    mobileAsset.StoreAssetId assetId, mobileAsset.IpAddress ipAddress, mobileAsset.MacAddress macAddress, mobileAsset.Model model, 
+                    mobileAsset.Manufacturer, mobileAsset.OsType, mobileAsset.OsVersion, mobileAsset.UpdatedTime updatedTime, opStatus.Status online
+                    from [store].[MobileAsset] mobileAsset
+                    left join [store].[Store] store
+                    on store.id = mobileAsset.storeId
+                    left join [store].[Brand] brand
+                    on brand.id = store.BrandId
+                    left join [store].[Retailer] retailer
+                    on brand.RetailerId = retailer.Id
+                    left join [store].[OperationalStatus] opStatus
+                    on mobileAsset.OperationalStatusId = opStatus.Id
+                    where retailer.name = ${retailer.description}`, (err, results) => {
+                        if (err) {
+                            console.log('sql error', err)
+                        } else {
+                            res.send(results.recordset)
+                        }
+                    })
+                }
+            }
+        })
+    });
+
+    app.get('/REMS/getRsmpWirelessPeripherals', (req, res) => {
+        console.log('getRsmpWirelessPeripherals called with: ', req.query)
+        var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
+        retailerDetails.findOne({ retailer_id: req.query["retailerId"] }, async function (err, retailer) {
+            if (retailer) {
+                if (req.query["isLab"] === 'false') {
+                    console.log('in prod system: ', retailer.description)
+                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpProdSqlConfig)
+                    let request = new sql.Request(sqlPool)
+                    request.query(` SELECT
+                    store.StoreNumber storeName,
+                    [PeripheralType] -- 1 === printer
+                    ,wp.[Model] model
+                    ,[FirmwareVersion] firmware
+                    ,wp.[OSVersion] osVersion
+                    ,[BluetoothId] bluetoothId
+                    ,[BluetoothAddress] bluetoothAddress
+                    ,[BluetoothRadioVersion] bluetoothRadioVersion
+                    ,[BluetoothLibraryVersion] bluetoothLibraryVersion
+                    ,[FreeRAMMemory] freeRam
+                    ,[TotalRAMMemory] totalRam
+                    ,[TotalFlashMemory] totalFlash
+                    ,[FreeFlashMemory] freeFlash
+                    ,[DeviceUpTime] deviceUptime
+                FROM [store].[WirelessPeripheral] wp
+                left join [store].[MobileAsset] mobileAsset
+                on mobileAsset.Id = wp.AssetId
+                  left join [store].[Store] store
+                on store.id = mobileAsset.storeId
+                left join [store].[Brand] brand
+                on brand.id = store.BrandId
+                left join [store].[Retailer] retailer
+                on brand.RetailerId = retailer.Id
+                left join [store].[OperationalStatus] opStatus
+                on mobileAsset.OperationalStatusId = opStatus.Id
+                where retailer.name = '${retailer.description}'`, (err, results) => {
+                        if (err) {
+                            console.log('sql error', err)
+                        } else {
+                            res.send(results.recordset)
+                        }
+                    })
+                } else if (req.query["isLab"] === 'true') {
+                    console.log('In lab system: ', retailer.description)
+                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpStagingSqlConfig)
+                    let request = new sql.Request(sqlPool)
+                    request.query(` SELECT
+                    store.StoreNumber storeName,
+                    [PeripheralType] -- 1 === printer
+                    ,wp.[Model] model
+                    ,[FirmwareVersion] firmware
+                    ,wp.[OSVersion] osVersion
+                    ,[BluetoothId] bluetoothId
+                    ,[BluetoothAddress] bluetoothAddress
+                    ,[BluetoothRadioVersion] bluetoothRadioVersion
+                    ,[BluetoothLibraryVersion] bluetoothLibraryVersion
+                    ,[FreeRAMMemory] freeRam
+                    ,[TotalRAMMemory] totalRam
+                    ,[TotalFlashMemory] totalFlash
+                    ,[FreeFlashMemory] freeFlash
+                    ,[DeviceUpTime] deviceUptime
+                FROM [store].[WirelessPeripheral] wp
+                left join [store].[MobileAsset] mobileAsset
+                on mobileAsset.Id = wp.AssetId
+                  left join [store].[Store] store
+                on store.id = mobileAsset.storeId
+                left join [store].[Brand] brand
+                on brand.id = store.BrandId
+                left join [store].[Retailer] retailer
+                on brand.RetailerId = retailer.Id
+                left join [store].[OperationalStatus] opStatus
+                on mobileAsset.OperationalStatusId = opStatus.Id
+                where retailer.name = '${retailer.description}'`, (err, results) => {
+                        if (err) {
+                            console.log('sql error', err)
+                        } else {
+                            res.send(results.recordset)
+                        }
+                    })
+                }
+            }
+        })
+    });
+
+
     app.delete("/REMS/deletefile", bodyParser.json(), async (req, res) => {
         console.log("Delete parmas received : ", req.body, req.query)
 
