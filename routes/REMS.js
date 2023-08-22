@@ -206,7 +206,7 @@ module.exports = function (app, connection, log) {
                     console.log('in prod system: ', retailer.description)
                     let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpProdSqlConfig)
                     let request = new sql.Request(sqlPool)
-                    request.query(` select 
+                    let query = SqlString.format(` select 
                     store.StoreNumber storeName,
                     mobileAsset.StoreAssetId assetId, mobileAsset.IpAddress ipAddress, mobileAsset.MacAddress macAddress, mobileAsset.Model model, 
                     mobileAsset.Manufacturer, mobileAsset.OsType, mobileAsset.OsVersion, mobileAsset.UpdatedTime updatedTime, opStatus.Status online
@@ -219,7 +219,8 @@ module.exports = function (app, connection, log) {
                     on brand.RetailerId = retailer.Id
                     left join [store].[OperationalStatus] opStatus
                     on mobileAsset.OperationalStatusId = opStatus.Id
-                    where retailer.name = '${retailer.description}'`, (err, results) => {
+                    where retailer.name = ?`, [retailer.description])
+                    request.query(query, (err, results) => {
                         if (err) {
                             console.log('sql error', err)
                         } else {
@@ -230,7 +231,7 @@ module.exports = function (app, connection, log) {
                     console.log('In lab system: ', retailer.description)
                     let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpStagingSqlConfig)
                     let request = new sql.Request(sqlPool)
-                    request.query(` select 
+                    let query = SqlString.format(` select 
                     store.StoreNumber storeName,
                     mobileAsset.StoreAssetId assetId, mobileAsset.IpAddress ipAddress, mobileAsset.MacAddress macAddress, mobileAsset.Model model, 
                     mobileAsset.Manufacturer, mobileAsset.OsType, mobileAsset.OsVersion, mobileAsset.UpdatedTime updatedTime, opStatus.Status online
@@ -243,7 +244,8 @@ module.exports = function (app, connection, log) {
                     on brand.RetailerId = retailer.Id
                     left join [store].[OperationalStatus] opStatus
                     on mobileAsset.OperationalStatusId = opStatus.Id
-                    where retailer.name = ${retailer.description}`, (err, results) => {
+                    where retailer.name = ?`, [retailer.description])
+                    request.query(query, (err, results) => {
                         if (err) {
                             console.log('sql error', err)
                         } else {
@@ -264,7 +266,7 @@ module.exports = function (app, connection, log) {
                     console.log('in prod system: ', retailer.description)
                     let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpProdSqlConfig)
                     let request = new sql.Request(sqlPool)
-                    request.query(` SELECT
+                    let query = SqlString.format(`SELECT
                     store.StoreNumber storeName,
                     [PeripheralType] -- 1 === printer
                     ,wp.[Model] model
@@ -290,7 +292,8 @@ module.exports = function (app, connection, log) {
                 on brand.RetailerId = retailer.Id
                 left join [store].[OperationalStatus] opStatus
                 on mobileAsset.OperationalStatusId = opStatus.Id
-                where retailer.name = '${retailer.description}'`, (err, results) => {
+                where retailer.name = ?`, [retailer.description])
+                    request.query(query, (err, results) => {
                         if (err) {
                             console.log('sql error', err)
                         } else {
@@ -301,7 +304,7 @@ module.exports = function (app, connection, log) {
                     console.log('In lab system: ', retailer.description)
                     let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpStagingSqlConfig)
                     let request = new sql.Request(sqlPool)
-                    request.query(` SELECT
+                    let query = SqlString.format(`SELECT
                     store.StoreNumber storeName,
                     [PeripheralType] -- 1 === printer
                     ,wp.[Model] model
@@ -327,7 +330,8 @@ module.exports = function (app, connection, log) {
                 on brand.RetailerId = retailer.Id
                 left join [store].[OperationalStatus] opStatus
                 on mobileAsset.OperationalStatusId = opStatus.Id
-                where retailer.name = '${retailer.description}'`, (err, results) => {
+                where retailer.name = ?`, [retailer.description])
+                    request.query(query, (err, results) => {
                         if (err) {
                             console.log('sql error', err)
                         } else {
