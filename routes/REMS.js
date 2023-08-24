@@ -11,18 +11,11 @@ const mongodb = require("mongodb")
 var { ObjectId } = require('mongodb')
 const { BlobServiceClient } = require('@azure/storage-blob');
 const extract = require('extract-zip')
-const apicache = require("apicache")
 var jwt = require('jsonwebtoken');
 const { v1: uuidv1 } = require('uuid');
-const sql = require('mssql');
-const { version } = require('os');
-const { versions } = require('process');
-let mssql = require('../middleware/mssql-pool-management')
-const SqlString = require('tsqlstring');
 
 require('dotenv').config()
 
-let cache = apicache.middleware
 // setup dirs
 var uploadDir = process.cwd() + "/uploads";
 
@@ -31,40 +24,6 @@ var uploadDir = process.cwd() + "/uploads";
 var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
 /* cSpell:enable */
-
-
-//setup azure SQL connection
-const rsmpProdSqlConfig = {
-    user: 'tgcs-reader',
-    password: 'PophatrAjatU0r7wResT', //TODO: make this an env param
-    server: 'tgcspccsqlsvr.database.windows.net',
-    database: 'pcc-storedata-db',
-    authentication: {
-        type: 'default'
-    },
-    options: {
-        encrypt: true,
-        trustServerCertificate: false,
-        hostNameInCertificate: "*.database.windows.net",
-        loginTimeout: 30
-    }
-}
-
-const rsmpStagingSqlConfig = {
-    user: 'tgcs-reader',
-    password: 'nLrodReswlv4sPocruq5', //TODO: make this an env param
-    server: 'tgcs-pcc-staging.database.windows.net',
-    database: 'pcc-storedata-db',
-    authentication: {
-        type: 'default'
-    },
-    options: {
-        encrypt: true,
-        trustServerCertificate: false,
-        hostNameInCertificate: "*.database.windows.net",
-        loginTimeout: 30
-    }
-}
 
 function sendRelevantJSON(res, jsonPath) {
     res.send(JSON.parse(
@@ -162,187 +121,6 @@ module.exports = function (app, connection, log) {
 
         sendRelevantJSON(res, 'low_mem.json');
     })
-
-    app.get('/REMS/getRsmpAlerts', (req, res) => {
-        console.log('getRsmpAlerts called with: ', req.query)
-        var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
-        retailerDetails.findOne({ retailer_id: req.query["retailerId"] }, async function (err, retailer) {
-            if (retailer) {
-                if (req.query["isLab"] === 'false') {
-                    console.log('in prod system: ', retailer.description)
-                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpProdSqlConfig)
-                    let request = new sql.Request(sqlPool)
-                    let query = SqlString.format(`select StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = ? and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`, [retailer.description])
-                    request.query(query, (err, results) => {
-                        if (err) {
-                            console.log('sql error', err)
-                        } else {
-                            res.send(results.recordset)
-                        }
-                    })
-                } else if (req.query["isLab"] === 'true') {
-                    console.log('In lab system: ', retailer.description)
-                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpStagingSqlConfig)
-                    let request = new sql.Request(sqlPool)
-                    let query = SqlString.format(`select StoreNumber = st.StoreNumber, AgentName = pa.StoreAssetId, AlertSeverity = nas.[Level], AlertType = nat.TypeName, AlertLabel = na.[Label], AlertThreshold = na.Threshold, AlertCurrentReading = na.CurrentReading, AlertCollectedTime = na.CollectedTime, AlertCreatedTime = na.CreatedTime from store.Retailer rt with(Nolock) join store.Brand br with(nolock) on br.RetailerId = rt.Id join store.Store st with(nolock) on st.BrandId = br.Id join store.PosAsset pa with(nolock) on pa.StoreId = st.Id join store.NativeAlert na with(nolock) on na.PosAssetId = pa.Id join store.AlertSeverity nas with(nolock) on na.SeverityId = nas.Id join store.AlertType nat with(nolock) on na.TypeId = nat.Id left join store.UpdnPeripheral updn with(nolock) on na.PosAssetId = updn.PosAssetId and na.PeripheralId = updn.Id left join store.UpdnCategory updnc with(nolock) on updn.UpdnCategoryId = updnc.Id where rt.IsRemoved = 0 and rt.[Name] = ? and br.IsRemoved = 0 and st.IsRemoved = 0 and pa.IsRemoved = 0 and isnull(updn.IsRemoved,0) = 0 and na.ResolvedTime is null`, [retailer.description])
-                    request.query(query, (err, results) => {
-                        if (err) {
-                            console.log('sql error', err)
-                        } else {
-                            res.send(results.recordset)
-                        }
-                    })
-                }
-            }
-        })
-    });
-
-    app.get('/REMS/getRsmpMobileAssets', (req, res) => {
-        console.log('getRsmpMobileAssets called with: ', req.query)
-        var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
-        retailerDetails.findOne({ retailer_id: req.query["retailerId"] }, async function (err, retailer) {
-            if (retailer) {
-                if (req.query["isLab"] === 'false') {
-                    console.log('in prod system: ', retailer.description)
-                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpProdSqlConfig)
-                    let request = new sql.Request(sqlPool)
-                    let query = SqlString.format(` select 
-                    store.StoreNumber storeName,
-                    mobileAsset.StoreAssetId assetId, mobileAsset.IpAddress ipAddress, mobileAsset.MacAddress macAddress, mobileAsset.Model model, 
-                    mobileAsset.Manufacturer, mobileAsset.OsType, mobileAsset.OsVersion, mobileAsset.UpdatedTime updatedTime, opStatus.Status online
-                    from [store].[MobileAsset] mobileAsset
-                    left join [store].[Store] store
-                    on store.id = mobileAsset.storeId
-                    left join [store].[Brand] brand
-                    on brand.id = store.BrandId
-                    left join [store].[Retailer] retailer
-                    on brand.RetailerId = retailer.Id
-                    left join [store].[OperationalStatus] opStatus
-                    on mobileAsset.OperationalStatusId = opStatus.Id
-                    where retailer.name = ?`, [retailer.description])
-                    request.query(query, (err, results) => {
-                        if (err) {
-                            console.log('sql error', err)
-                        } else {
-                            res.send(results.recordset)
-                        }
-                    })
-                } else if (req.query["isLab"] === 'true') {
-                    console.log('In lab system: ', retailer.description)
-                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpStagingSqlConfig)
-                    let request = new sql.Request(sqlPool)
-                    let query = SqlString.format(` select 
-                    store.StoreNumber storeName,
-                    mobileAsset.StoreAssetId assetId, mobileAsset.IpAddress ipAddress, mobileAsset.MacAddress macAddress, mobileAsset.Model model, 
-                    mobileAsset.Manufacturer, mobileAsset.OsType, mobileAsset.OsVersion, mobileAsset.UpdatedTime updatedTime, opStatus.Status online
-                    from [store].[MobileAsset] mobileAsset
-                    left join [store].[Store] store
-                    on store.id = mobileAsset.storeId
-                    left join [store].[Brand] brand
-                    on brand.id = store.BrandId
-                    left join [store].[Retailer] retailer
-                    on brand.RetailerId = retailer.Id
-                    left join [store].[OperationalStatus] opStatus
-                    on mobileAsset.OperationalStatusId = opStatus.Id
-                    where retailer.name = ?`, [retailer.description])
-                    request.query(query, (err, results) => {
-                        if (err) {
-                            console.log('sql error', err)
-                        } else {
-                            res.send(results.recordset)
-                        }
-                    })
-                }
-            }
-        })
-    });
-
-    app.get('/REMS/getRsmpWirelessPeripherals', (req, res) => {
-        console.log('getRsmpWirelessPeripherals called with: ', req.query)
-        var retailerDetails = azureClient.db("pas_software_distribution").collection("retailers");
-        retailerDetails.findOne({ retailer_id: req.query["retailerId"] }, async function (err, retailer) {
-            if (retailer) {
-                if (req.query["isLab"] === 'false') {
-                    console.log('in prod system: ', retailer.description)
-                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpProdSqlConfig)
-                    let request = new sql.Request(sqlPool)
-                    let query = SqlString.format(`SELECT
-                    store.StoreNumber storeName,
-                    [PeripheralType] -- 1 === printer
-                    ,wp.[Model] model
-                    ,[FirmwareVersion] firmware
-                    ,wp.[OSVersion] osVersion
-                    ,[BluetoothId] bluetoothId
-                    ,[BluetoothAddress] bluetoothAddress
-                    ,[BluetoothRadioVersion] bluetoothRadioVersion
-                    ,[BluetoothLibraryVersion] bluetoothLibraryVersion
-                    ,[FreeRAMMemory] freeRam
-                    ,[TotalRAMMemory] totalRam
-                    ,[TotalFlashMemory] totalFlash
-                    ,[FreeFlashMemory] freeFlash
-                    ,[DeviceUpTime] deviceUptime
-                FROM [store].[WirelessPeripheral] wp
-                left join [store].[MobileAsset] mobileAsset
-                on mobileAsset.Id = wp.AssetId
-                  left join [store].[Store] store
-                on store.id = mobileAsset.storeId
-                left join [store].[Brand] brand
-                on brand.id = store.BrandId
-                left join [store].[Retailer] retailer
-                on brand.RetailerId = retailer.Id
-                left join [store].[OperationalStatus] opStatus
-                on mobileAsset.OperationalStatusId = opStatus.Id
-                where retailer.name = ?`, [retailer.description])
-                    request.query(query, (err, results) => {
-                        if (err) {
-                            console.log('sql error', err)
-                        } else {
-                            res.send(results.recordset)
-                        }
-                    })
-                } else if (req.query["isLab"] === 'true') {
-                    console.log('In lab system: ', retailer.description)
-                    let sqlPool = await mssql.GetCreateIfNotExistPool(rsmpStagingSqlConfig)
-                    let request = new sql.Request(sqlPool)
-                    let query = SqlString.format(`SELECT
-                    store.StoreNumber storeName,
-                    [PeripheralType] -- 1 === printer
-                    ,wp.[Model] model
-                    ,[FirmwareVersion] firmware
-                    ,wp.[OSVersion] osVersion
-                    ,[BluetoothId] bluetoothId
-                    ,[BluetoothAddress] bluetoothAddress
-                    ,[BluetoothRadioVersion] bluetoothRadioVersion
-                    ,[BluetoothLibraryVersion] bluetoothLibraryVersion
-                    ,[FreeRAMMemory] freeRam
-                    ,[TotalRAMMemory] totalRam
-                    ,[TotalFlashMemory] totalFlash
-                    ,[FreeFlashMemory] freeFlash
-                    ,[DeviceUpTime] deviceUptime
-                FROM [store].[WirelessPeripheral] wp
-                left join [store].[MobileAsset] mobileAsset
-                on mobileAsset.Id = wp.AssetId
-                  left join [store].[Store] store
-                on store.id = mobileAsset.storeId
-                left join [store].[Brand] brand
-                on brand.id = store.BrandId
-                left join [store].[Retailer] retailer
-                on brand.RetailerId = retailer.Id
-                left join [store].[OperationalStatus] opStatus
-                on mobileAsset.OperationalStatusId = opStatus.Id
-                where retailer.name = ?`, [retailer.description])
-                    request.query(query, (err, results) => {
-                        if (err) {
-                            console.log('sql error', err)
-                        } else {
-                            res.send(results.recordset)
-                        }
-                    })
-                }
-            }
-        })
-    });
-
 
     app.delete("/REMS/deletefile", bodyParser.json(), async (req, res) => {
         console.log("Delete parmas received : ", req.body, req.query)
@@ -1114,7 +892,7 @@ module.exports = function (app, connection, log) {
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
-                    console.log("sending alerts info : ", pasAvailability)
+                    // console.log("sending alerts info : ", pasAvailability)
                     res.status(statusCode.OK).json(pasAvailability);
                 }
             });
@@ -1129,7 +907,7 @@ module.exports = function (app, connection, log) {
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
-                    console.log("sending alerts info : ", pasAvailability)
+                    // console.log("sending alerts info : ", pasAvailability)
                     res.status(statusCode.OK).json(pasAvailability);
                 }
             });
@@ -1151,7 +929,7 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending rems info : ", rems[0])
+                // console.log("sending rems info : ", rems[0])
                 res.status(statusCode.OK).json(rems[0]);
             }
         });
@@ -1171,7 +949,7 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending store info : ", rems)
+                // console.log("sending store info : ", rems)
                 res.status(statusCode.OK).json(rems);
             }
         });
@@ -1207,7 +985,7 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending agentList : ", agentList);
+                // console.log("sending agentList : ", agentList);
                 res.status(statusCode.OK).json(agentList);
             }
         });
@@ -1264,7 +1042,7 @@ module.exports = function (app, connection, log) {
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
-                    console.log("sending agentList : ", agentList);
+                    // console.log("sending agentList : ", agentList);
                     res.status(statusCode.OK).json(agentList);
                 }
             });
@@ -1280,7 +1058,7 @@ module.exports = function (app, connection, log) {
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
-                    console.log("sending agentList : ", agentList);
+                    // console.log("sending agentList : ", agentList);
                     res.status(statusCode.OK).json(agentList);
                 }
             });
@@ -1302,7 +1080,7 @@ module.exports = function (app, connection, log) {
                 const msg = { "message": "Retailers: Error reading from server" }
                 res.status(204).json(msg);
             } else {
-                console.log("Retrieved retailer list");
+                // console.log("Retrieved retailer list");
 
                 let retailerIds = retailerList.map(retailer => retailer.retailer_id);
 
@@ -1315,7 +1093,7 @@ module.exports = function (app, connection, log) {
                         const msg = { "message": "Agents: Error reading from server" }
                         res.status(204).json(msg);
                     } else {
-                        console.log("Sending agentList : ", agentList);
+                        // console.log("Sending agentList : ", agentList);
                         res.status(200).json(agentList);
                     }
                 });
@@ -1323,45 +1101,8 @@ module.exports = function (app, connection, log) {
         });
     });
 
-
-
-    app.get('/REMS/retrieveTenantParentAndDescription', (req, res) => {
-        var retailers = azureClient.db("pas_software_distribution").collection("retailers");
-        retailers.find({ isTenantRemsServer: true }, {}).toArray(function (err, retailerList) {
-            if (err) {
-                const msg = { "error": err };
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
-                throw err;
-            } else if (!retailerList) {
-                const msg = { "message": "Agents: Error reading from server" };
-                res.status(statusCode.NO_CONTENT).json(msg);
-            }
-            else {
-                var desiredRetailer = ''
-                retailerList.forEach(retailer => {
-                    retailer.tenants.forEach(tenant => {
-                        if (tenant.retailer_id === req.query["retailerId"]) {
-                            desiredRetailer = {
-                                retailer_id: retailer.retailer_id,
-                                tenant_id: tenant.retailer_id,
-                                description: tenant.description
-                            }
-                        }
-                    });
-                });
-                if (desiredRetailer !== '') {
-                    res.status(statusCode.OK).json(desiredRetailer)
-                } else {
-                    const msg = { "message": "Could not find desired retailer" }
-                    res.status(statusCode.NO_CONTENT).json(msg)
-                }
-
-            }
-        });
-    });
-
     app.get('/REMS/stores', (req, res) => {
-        console.log("Get /REMS/stores received : ", req.query)
+        console.log("Get /REMS/stores called with: ", req.query)
         let filters = {}
 
         const agents = azureClient.db("pas_software_distribution").collection("stores");
@@ -1442,142 +1183,10 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending storeList : ", storeList)
+                // console.log("sending storeList : ", storeList)
                 res.status(statusCode.OK).json(storeList);
             }
         });
-    });
-
-    app.post('/REMS/getSidebarConfiguration', bodyParser.json(), (req, res) => {
-        console.log('getSidebarConfiguration called with: ', req.body)
-        const configurations = azureClient.db("pas_config").collection("configurations");
-        const retailers = azureClient.db("pas_software_distribution").collection("retailers");
-        let query = { configType: 'retailer' }
-
-        configurations.find(query).toArray(function (err, result) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else if (!result) {
-                const msg = { "message": "Config: Error reading from server" }
-                res.status(statusCode.NO_CONTENT).json(msg);
-            } else {
-                const configurationData = result
-                retailers.find({ retailer_id: { $in: req.body.data } }).toArray(function (err, retailerResult) {
-                    if (err) {
-                        const msg = { "error": err }
-                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                        throw err
-                    } else if (!result) {
-                        const msg = { "message": "Config: Error reading from server" }
-                        res.status(statusCode.NO_CONTENT).json(msg);
-                    } else {
-                        const configurationResponse = {}
-                        retailerResult.forEach(retailer => {
-                            configurationData.forEach((config, index) => {
-                                if (_.has(retailer.configuration, config.configName)) {
-                                    // add to response
-                                    let tempObj = {
-                                        configName: config.configName,
-                                        configValue: retailer.configuration[config.configName],
-                                        configValueType: config.configValueType,
-                                        configDisplay: config.configDisplay,
-                                        configCategory: config.configCategory
-                                    }
-                                    _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
-                                } else {
-                                    // add default to response
-                                    let tempObj = {
-                                        configName: config.configName,
-                                        configValue: config.configDefaultValue,
-                                        configValueType: config.configValueType,
-                                        configDisplay: config.configDisplay,
-                                        configCategory: config.configCategory
-                                    }
-                                    _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
-                                }
-                            });
-                        });
-                        console.log("Found retailer config data: ", retailerResult[0])
-                        res.status(statusCode.OK).json(configurationResponse);
-                    }
-                })
-            }
-        })
-    });
-
-    app.get('/REMS/retailerConfiguration', (req, res) => {
-        console.log('retailerConfiguration called with: ', req.query)
-        const configurations = azureClient.db("pas_config").collection("configurations");
-        const retailers = azureClient.db("pas_software_distribution").collection("retailers");
-        let query = null
-        if (req.query.isAdmin === 'true') {
-            query = { configType: 'retailer' }
-        } else if (req.query.ccv === 'true') {
-            query = { configType: 'retailer', toshibaOnly: false }
-        } else {
-            query = { configType: 'retailer', toshibaOnly: false, commandCenterOnly: false }
-        }
-
-        configurations.find(query).toArray(function (err, result) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else if (!result) {
-                const msg = { "message": "Config: Error reading from server" }
-                res.status(statusCode.NO_CONTENT).json(msg);
-            } else {
-                const configurationData = result
-
-                let retailerId = ''
-                if (req.query?.retailerId !== undefined) {
-                    retailerId = req.query?.retailerId
-                } else {
-                    res.status(statusCode.INTERNAL_SERVER_ERROR).json('Somehow no retailer id sent')
-                }
-                retailers.find({ retailer_id: retailerId }, {}).toArray(function (err, retailerResult) {
-                    if (err) {
-                        const msg = { "error": err }
-                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                        throw err
-                    } else if (!result) {
-                        const msg = { "message": "Config: Error reading from server" }
-                        res.status(statusCode.NO_CONTENT).json(msg);
-                    }
-                    else {
-                        const configurationResponse = {}
-
-                        configurationData.forEach((config, index) => {
-                            if (_.has(retailerResult[0].configuration, config.configName)) {
-                                // add to response
-                                let tempObj = {
-                                    configName: config.configName,
-                                    configValue: retailerResult[0].configuration[config.configName],
-                                    configValueType: config.configValueType,
-                                    configDisplay: config.configDisplay,
-                                    configCategory: config.configCategory
-                                }
-                                _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
-                            } else {
-                                // add default to response
-                                let tempObj = {
-                                    configName: config.configName,
-                                    configValue: config.configDefaultValue,
-                                    configValueType: config.configValueType,
-                                    configDisplay: config.configDisplay,
-                                    configCategory: config.configCategory
-                                }
-                                _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
-                            }
-                        });
-                        console.log("Found retailer config data: ", retailerResult[0])
-                        res.status(statusCode.OK).json(configurationResponse);
-                    }
-                })
-            }
-        })
     });
 
     app.post('/REMS/retailerConfigurationUpdate', bodyParser.json(), (request, response) => {
@@ -1587,7 +1196,7 @@ module.exports = function (app, connection, log) {
 
         const configQuery = { retailer_id: retailerId };
         const configUpdate = { $set: { configuration: updatedConfiguration } }
-        console.log(request.body)
+        // console.log(request.body)
         request.body.forEach(configItem => {
             receivedConfigItems.push(configItem)
         });
@@ -1702,60 +1311,6 @@ module.exports = function (app, connection, log) {
                 console.log("Found admin config data: ", configurationResponse)
                 res.status(statusCode.OK).json(configurationResponse);
 
-            }
-        })
-    });
-
-    app.post('/REMS/userSettingsSubmission', bodyParser.json(), (request, response) => {
-        let updateWasGood = true
-        const receivedObject = request.body
-        const userQuery = { email: receivedObject.email }
-        const updateSet = { $set: { firstName: receivedObject.firstName, lastName: receivedObject.lastName, userDefinedMapConfig: receivedObject.userDefinedMapConfig } }
-
-        const userToUpdate = azureClient.db("pas_config").collection("user");
-        userToUpdate.updateOne(userQuery, updateSet, function (error, updateResult) {
-            if (error) {
-                console.log("Update error: ", error)
-                const msg = { "message": "Error updating retailer configuration" }
-                updateWasGood = false
-                response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
-                throw (error)
-            }
-            if (updateResult) {
-                const responseInfo =
-                    "User with email: " + receivedObject.email + " was updated to be " + receivedObject.firstName + " " + receivedObject.lastName
-                console.log("Update of user was SUCCESS : ", responseInfo)
-            }
-            if (updateWasGood) {
-                response.status(statusCode.OK).json({ "message": "SUCCESS" });
-                return
-            }
-        })
-    });
-
-    app.post('/REMS/userManagementSubmission', bodyParser.json(), (request, response) => {
-        let updateWasGood = true
-        const receivedObject = request.body
-        const userQuery = { email: receivedObject.user.email }
-        const updateSet = { $set: { retailer: receivedObject.retailers, role: receivedObject.roles } }
-
-        const userToUpdate = azureClient.db("pas_config").collection("user");
-        userToUpdate.updateOne(userQuery, updateSet, function (error, updateResult) {
-            if (error) {
-                console.log("Update error : ", error)
-                const msg = { "message": "Error updating retailer configuration" }
-                updateWasGood = false
-                response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
-                throw (error)
-            }
-            if (updateResult) {
-                const responseInfo =
-                    "User with email: " + receivedObject.user.email + " was updated."
-                console.log("Update of user was SUCCESS : ", responseInfo)
-            }
-            if (updateWasGood) {
-                response.status(statusCode.OK).json({ "message": "SUCCESS" });
-                return
             }
         })
     });
@@ -2004,86 +1559,6 @@ module.exports = function (app, connection, log) {
                 output = rems.map(function (item) { return item.retailer_id; })
                 res.status(statusCode.OK).json(output);
             }
-        });
-    });
-
-    app.post('/REMS/insertUser', (req, res) => {
-        console.log('/REMS/insertUser with: ', req.query)
-        var users = azureClient.db("pas_config").collection("user");
-        users.findOne({ email: req.query["userEmail"] }).then((result) => {
-            if (result !== null) {
-                const msg = { "error": 'User already exists!' }
-                res.status(statusCode.CONFLICT).json(msg)
-                res.send()
-            } else {
-                var newUserToInsert = {
-                    email: req.query["userEmail"],
-                    retailer: [],
-                    role: [],
-                    userDefinedMapConfig: ""
-                }
-                users.insertOne(newUserToInsert, function (err, result) {
-                    if (err) {
-                        const msg = { "error": err }
-                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                        throw err;
-                    } else {
-                        const msg = { "message": "Success" }
-                        res.status(statusCode.OK).json(msg);
-                    }
-                    res.send()
-                })
-            }
-        })
-    })
-
-    app.get('/REMS/getRoleDetails', (req, res) => {
-        var results = {}
-        var userRoles = azureClient.db("pas_config").collection("user");
-        userRoles.find({ email: { '$regex': req.query.email, $options: 'i' } }).limit(1).toArray(function (err, result) {
-
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            }
-
-            if (result.length > 0) {
-                results = result[0];
-            }
-
-            res.send(results)
-        });
-    });
-
-    app.get('/REMS/getUserDetails', (req, res) => {
-        var results = {}
-        var userDetails = azureClient.db("pas_config").collection("user");
-        userDetails.find({ email: { '$regex': req.query.email, $options: 'i' } }).limit(1).toArray(function (err, result) {
-
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            }
-
-            if (result.length > 0) {
-                results = result[0];
-            }
-
-            res.send(results)
-        });
-    });
-
-    app.get('/REMS/getAllUserDetails', (req, res) => {
-        var userDetails = azureClient.db("pas_config").collection("user");
-        userDetails.find().toArray(function (err, result) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            }
-            res.send(result)
         });
     });
 
