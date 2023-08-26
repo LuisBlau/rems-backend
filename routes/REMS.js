@@ -11,12 +11,11 @@ const mongodb = require("mongodb")
 var { ObjectId } = require('mongodb')
 const { BlobServiceClient } = require('@azure/storage-blob');
 const extract = require('extract-zip')
-const apicache = require("apicache")
 var jwt = require('jsonwebtoken');
 const { v1: uuidv1 } = require('uuid');
+
 require('dotenv').config()
 
-let cache = apicache.middleware
 // setup dirs
 var uploadDir = process.cwd() + "/uploads";
 
@@ -25,8 +24,6 @@ var uploadDir = process.cwd() + "/uploads";
 var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
 /* cSpell:enable */
-
-//find retailer id
 
 function sendRelevantJSON(res, jsonPath) {
     res.send(JSON.parse(
@@ -125,6 +122,35 @@ module.exports = function (app, connection, log) {
         sendRelevantJSON(res, 'low_mem.json');
     })
 
+    app.delete("/REMS/deletefile", bodyParser.json(), async (req, res) => {
+        console.log("Delete parmas received : ", req.body, req.query)
+
+        const retailerId = req.body?.retailerId;
+        const id = req.body?.id;
+
+        // Make sure id and retailerId are valid
+        if (!id || !retailerId) {
+            res.status(400).send({ error: "Bad request. id or retailerId is missing." });
+            return;
+        }
+
+        // Assuming the 'uploads' collection is where your file data is stored
+        const uploads = azureClient.db("pas_software_distribution").collection("uploads");
+
+        // Delete the document from MongoDB where retailer_id and id match
+        try {
+            const result = await uploads.deleteOne({ retailer_id: retailerId, id: id });
+            if (result.deletedCount === 1) {
+                res.status(200).send({ message: "Document successfully deleted from the database." });
+            } else {
+                res.status(404).send({ error: "Document not found in the database." });
+            }
+        } catch (error) {
+            res.status(500).send({ error: "An error occurred when trying to delete the document from the database." });
+            console.error(error);
+        }
+    });
+
     app.post("/REMS/uploadfile", async (req, res) => {
         const retailerId = req.query["retailerId"]
         const allowedExtensions = [".zip", ".upload"];
@@ -189,11 +215,11 @@ module.exports = function (app, connection, log) {
 
             try {
                 let query
-                if (req.query["tenantId"] === undefined) {
-                    query = { retailer_id: retailerId };
-                } else {
-                    query = { retailer_id: retailerId, tenant_id: req.query["tenantId"] }
-                }
+                // if (req.query["tenantId"] === undefined) {
+                query = { retailer_id: retailerId };
+                // } else {
+                //     query = { retailer_id: retailerId, tenant_id: req.query["tenantId"] }
+                // }
 
                 const options = { sort: { "id": -1 } };
                 var results = [];
@@ -207,11 +233,11 @@ module.exports = function (app, connection, log) {
                     // increments the index
                     index++;
                     let azureFileName
-                    if (req.query["tenantId"] === undefined) {
-                        azureFileName = retailerId + "-" + index.toString() + ".upload";
-                    } else {
-                        azureFileName = req.query["tenantId"] + "-" + index.toString() + ".upload";
-                    }
+                    // if (req.query["tenantId"] === undefined) {
+                    azureFileName = retailerId + "-" + index.toString() + ".upload";
+                    // } else {
+                    // azureFileName = req.query["tenantId"] + "-" + index.toString() + ".upload";
+                    // }
                     const AZURE_STORAGE_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=pasfileuploads;AccountKey=6Wh7jcTvZYyAGyiyq7nZWcbZHZyNPDnrVLY6OgeDv3CmhRHDBdzWc8dAAgigrEZkxYFyQR2UJ6AO+ASt/Q2DQg==;EndpointSuffix=core.windows.net";
 
                     try {
@@ -245,6 +271,7 @@ module.exports = function (app, connection, log) {
                     if (req.query["tenantId" === undefined]) {
                         newFile = {
                             id: index,
+                            uuid: uuidv1(),
                             retailer_id: retailerId,
                             filename: filename,
                             inserted: currentdate.getTime(),
@@ -256,6 +283,7 @@ module.exports = function (app, connection, log) {
                     } else {
                         newFile = {
                             id: index,
+                            uuid: uuidv1(),
                             retailer_id: retailerId,
                             tenant_id: req.query["tenantId"],
                             filename: filename,
@@ -285,19 +313,47 @@ module.exports = function (app, connection, log) {
         });
     });
 
-
-    app.get('/REMS/uploads', (req, res) => {
-        let results = []
-        let query = { retailer_id:{ $in: ['COMMON',req.query.retailerId]} }
+    app.get('/REMS/devices', (req, res) => {
+        let query = { retailer_id: req.query.retailerId }
         if (req.query["tenantId"] !== undefined) {
             query.tenant_id = req.query["tenantId"]
         }
-        if (!(req.query?.archived)) query["archived"] = false
+
+        var devices = azureClient.db("pas_software_distribution").collection("devices");
+        devices.find(query).toArray(function (err, results) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+            } else if (results.length === 0) {
+                const msg = { "message": "Rems: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            } else {
+                res.status(statusCode.OK).json(results);
+            }
+        })
+    });
+
+
+    app.get('/REMS/uploads', (req, res) => {
+        let query = { retailer_id: req.query.retailerId }
+        if (req.query["tenantId"] !== undefined) {
+            query.tenant_id = req.query["tenantId"]
+        }
+        var allUploads = []
+
+        if (!(req.query?.archived)) query["archived"] = { $in: ['false', false] }
         var uploads = azureClient.db("pas_software_distribution").collection("uploads");
-        uploads.find(query).toArray(function (err, result) {
-            results = result;
-            res.send(results)
-        });
+        uploads.find(query).forEach(function (result) {
+            allUploads.push(result)
+        }).then(() => {
+            var uploads = azureClient.db("pas_software_distribution").collection("uploads");
+            query = { retailer_id: "COMMON" }
+            uploads.find(query).forEach(function (result) {
+                allUploads.push(result)
+            }).then(() => {
+                res.send(allUploads)
+            })
+        })
     });
 
     app.get("/REMS/deleteExistingList", (req, res) => {
@@ -342,7 +398,7 @@ module.exports = function (app, connection, log) {
     })
 
     app.post('/sendCommand', bodyParser.json(), (req, res) => {
-        console.log('/sendCommand with: ', req.query)
+        console.log('/sendCommand with: ', req.query, req.body)
         const retailerId = req.query["retailerId"]
         //query biggest index
         var deployConfig = azureClient.db("pas_software_distribution").collection("deploy-config");
@@ -366,9 +422,20 @@ module.exports = function (app, connection, log) {
 
             var toInsert = {
                 id: index,
+                uuid: uuidv1(),
                 name: req.body.name,
                 retailer_id: retailerId,
                 steps: []
+            }
+
+            if (req.query.tenantId === 'common' || req.query.retailerId === 'common') {
+                toInsert = {
+                    id: index,
+                    name: req.body.name,
+                    retailer_id: retailerId,
+                    steps: [],
+                    forProd: req.body.forProd
+                }
             }
 
             if (req.query["tenantId"] !== undefined) {
@@ -415,10 +482,10 @@ module.exports = function (app, connection, log) {
         if (req.query["tenantId"] !== undefined) {
             filters.tenant_id = req.query["tenantId"]
         }
-        if (req.query.store) filters.storeName = { $regex: ".*" + req.query.store + ".*" }
-        if (req.query.package && parseInt(req.query.package) > 0) filters.config_id = parseInt(req.query.package)
+        if (req.query.store) filters.agentName = { $regex: ".*" + req.query.store + ".*" }
+        if (req.query.package) filters.package = req.query.package
         if (req.query.records) maxRecords = parseInt(req.query.records);
-        if (req.query.status && "All" !== req.query.status) filters.status = req.query.status;
+        if (req.query.status) filters.status = req.query.status;
         var deploys = azureClient.db("pas_software_distribution").collection("deployments");
         deploys.find({ retailer_id: req.query["retailerId"], ...filters }).sort({ id: -1 }).limit(maxRecords).toArray(function (err, result) {
             results = result;
@@ -427,6 +494,7 @@ module.exports = function (app, connection, log) {
     });
 
     app.get('/REMS/deploy-configs', (req, res) => {
+        console.log('deploy-configs called: ', req.query)
         var results = [];
         var retailer_id = req.query["retailerId"]?.split(',');
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
@@ -478,8 +546,51 @@ module.exports = function (app, connection, log) {
     });
 
     app.get("/REMS/setArchive", (req, res) => {
-        azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "_id": req.query.id }, { "$set": { "archived": (req.query.archived) } })
+        azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "uuid": req.query.uuid }, { "$set": { "archived": (req.query.archived) } })
         res.sendStatus(200)
+    });
+
+    app.get("/REMS/setForProd", (req, res) => {
+        azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "uuid": req.query.uuid }, { "$set": { "forProd": (req.query.forProd) } })
+        res.sendStatus(200)
+    });
+
+    app.get("/REMS/getAttendedLanes", (req, res) => {
+        console.log('getAttendedLanes called with: ', req.query)
+        let agents = azureClient.db("pas_software_distribution").collection("agents")
+        let query = {}
+        if (req.query["tenantId"] === undefined) {
+            query = { retailer_id: req.query["retailerId"] }
+        } else {
+            query = { retailer_id: req.query["retailerId"], tenant_id: req.query["tenantId"] }
+        }
+        agents.find(query).toArray(function (err, results) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                return;
+            } else if (results.length < 1) {
+                const msg = { "Message": 'No agents found', "Code": 204 }
+                res.status(200).json(msg);
+                return;
+            } else {
+                let agentsToSend = []
+                results.forEach(agent => {
+                    if (agent.status) {
+                        if (!_.includes(Object.keys(agent.status), "Controller")) {
+                            let agentTypes = ['SI Terminal', 'CHEC', 'Controller']
+                            agent.id = agent._id
+                            agent.type = agentTypes[Math.floor(Math.random() * agentTypes.length)];
+                            agentsToSend.push(agent)
+                        }
+                    } else {
+                        agentsToSend.push(agent)
+                    }
+                });
+                res.status(200).json(agentsToSend)
+            }
+        })
+
     });
 
     app.get("/REMS/versionsData", async (req, res) => {
@@ -495,6 +606,9 @@ module.exports = function (app, connection, log) {
             let rem = await azureClient.db("pas_software_distribution")
                 .collection("rems")
                 .findOne(query);
+            if (req.query.tenant_id) {
+                query["tenant_id"] = req.query.tenant_id;
+            }
             data.rem = rem;
             let agents = await azureClient.db("pas_software_distribution")
                 .collection("agents")
@@ -529,36 +643,68 @@ module.exports = function (app, connection, log) {
         }
     });
 
-    app.get("/REMS/versionCombinations", cache("1 hour"), (req, res) => {
-        remsmap = {}
-        versions = []
-        query = {}
-        descriptionmap = {}
-        if (!req.query.allRetailers)
-            query["retailer_id"] = req.query["retailerId"]
-        azureClient.db("pas_software_distribution").collection("retailers").find(query).forEach(function (r) {
-            descriptionmap[r["retailer_id"]] = r["description"]
+    app.get("/REMS/versionCombinations", (req, res) => {
+        let query = {}
+        if (req.query["tenantId"] === undefined) {
+            if (req.query["allRetailers"] === 'false') {
+                query.retailer_id = req.query["retailerId"]
+            }
+        } else {
+            if (req.query["allRetailers"] === 'false') {
+                query.retailer_id = req.query["retailerId"]
+                query.tenant_id = req.query["tenantId"]
+            }
+        }
+        let remsmap = {}
+        let versions = []
+        let descriptionmap = {}
+
+        azureClient.db("pas_software_distribution").collection("retailers").find(query).forEach(function (retailer) {
+            descriptionmap[retailer["retailer_id"]] = retailer["description"]
         }).then(() => {
-            azureClient.db("pas_software_distribution").collection("rems").find(query).forEach(function (r) {
-                if (r["version"])
-                    remsmap[r["retailer_id"]] = r["version"]
+            azureClient.db("pas_software_distribution").collection("rems").find(query).forEach(function (rems) {
+                if (rems["version"]) {
+                    // sets the REMS version for the retailer in remsmap
+                    remsmap[rems["retailer_id"]] = rems["version"]
+                }
             }).then(function () {
-                azureClient.db("pas_software_distribution").collection("agents").find(query).forEach(function (r) {
-                    if (!remsmap[r["retailer_id"]]) {
+                azureClient.db("pas_software_distribution").collection("agents").find(query).forEach(function (agent) {
+                    if (!remsmap[agent["retailer_id"]]) {
                         return;
                     }
-                    let rems = remsmap[r["retailer_id"]]
+                    let rems = remsmap[agent["retailer_id"]]
                     let rma = null
                     let cf = "2.1.2"
-                    if (!r["versions"]) return
-                    for (var v of r["versions"]) {
-                        if (v["Remote Management Agent"]) {
-                            rma = v["Remote Management Agent"]
-                            break
+                    if (!agent["versions"]) return
+                    for (var v of agent["versions"]) {
+                        // check if the version object has "Name" and "Version" properties
+                        if (v["Name"] && v["Version"]) {
+                            // look for the Remote Management Agent (RMA) version
+                            if (v["Name"].includes("Remote Management Agent")) {
+                                let originalVersion = v["Version"]
+                                if (originalVersion.startsWith("R")) {
+                                    let splitVersion = originalVersion.split('-', [3]);
+                                    if (splitVersion.length >= 3) {
+                                        let extractedVersion = splitVersion[2].slice(0, 3);
+                                        let version = extractedVersion.split('').join('.');
+                                        rma = version ? version : null;
+                                        break;
+                                    }
+                                } else {
+                                    rma = originalVersion ? originalVersion : null;
+                                    break;
+                                }
+                            }
+                        }
+                        // check if the version object has "Remote Management Agent" as a key
+                        else if (v["Remote Management Agent"]) {
+                            let version = v["Remote Management Agent"];
+                            rma = version ? version : null;
+                            break;
                         }
                     }
                     if (!rma) return
-                    versions.push({ "rma": rma, "rems": rems, "cf": cf, "retailer": descriptionmap[r["retailer_id"]] })
+                    versions.push({ "rma": rma, "rems": rems, "cf": cf, "retailer": descriptionmap[agent["retailer_id"]] })
                 }).then(function () {
                     let objCount = {}
                     for (var y of versions) {
@@ -579,8 +725,9 @@ module.exports = function (app, connection, log) {
             })
         })
     });
+
     app.post('/deploy-schedule', bodyParser.json(), (req, res) => {
-        console.log("POST deploy-schedule received : ", req.body)
+        console.log("POST deploy-schedule received : ", req.body, req.query)
 
         const dateTime = req.body["dateTime"];
         const name = req.body.name
@@ -588,13 +735,11 @@ module.exports = function (app, connection, log) {
         const selected_retailer_id = req.query["retailerId"]
         let storeList = req.body.storeList
         const retailer_id = req.body["retailerId"]
-        const tenant_id = req.body["tenantId"]
-
+        const tenant_id = req.query["tenantId"]
+        const variables = req.body["variables"]
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        let filters = { retailer_id: retailer_id, name: name, id: id }
-        if (tenant_id !== undefined) {
-            filters.tenant_id = tenant_id
-        }
+        let filters = { retailer_id: retailer_id, name: name, uuid: id }
+
         configs.findOne(filters, function (err, config) {
             if (err) {
                 const msg = { "error": err }
@@ -619,12 +764,15 @@ module.exports = function (app, connection, log) {
                 if (tenant_id !== undefined) {
                     record.tenant_id = tenant_id
                 }
-
                 for (const i in record.steps) {
+                    for (var v of Object.keys(record.steps[i])) {
+                        for (var k of Object.keys(variables)) {
+                            record.steps[i][v] = record.steps[i][v].replace(k, variables[k]);
+                        }
+                    }
                     record.steps[i].status = 'Initial'
                     record.steps[i].output = []
                 }
-
                 var newRecords = [];
                 var missingAgent = [];
                 const deployments = azureClient.db("pas_software_distribution").collection("deployments");
@@ -744,7 +892,7 @@ module.exports = function (app, connection, log) {
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
-                    console.log("sending alerts info : ", pasAvailability)
+                    // console.log("sending alerts info : ", pasAvailability)
                     res.status(statusCode.OK).json(pasAvailability);
                 }
             });
@@ -759,7 +907,7 @@ module.exports = function (app, connection, log) {
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
-                    console.log("sending alerts info : ", pasAvailability)
+                    // console.log("sending alerts info : ", pasAvailability)
                     res.status(statusCode.OK).json(pasAvailability);
                 }
             });
@@ -781,8 +929,28 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending rems info : ", rems[0])
+                // console.log("sending rems info : ", rems[0])
                 res.status(statusCode.OK).json(rems[0]);
+            }
+        });
+    });
+
+    app.get('/REMS/storeInfo', (req, res) => {
+        console.log("Get /REMS/storeInfo received : ", req.query)
+
+        const stores = azureClient.db("pas_software_distribution").collection("stores");
+        stores.find({ retailer_id: req.query["retailerId"], storeName: req.query["storeName"] }, {}).toArray(function (err, rems) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!rems) {
+                const msg = { "message": "Rems: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+                // console.log("sending store info : ", rems)
+                res.status(statusCode.OK).json(rems);
             }
         });
     });
@@ -817,7 +985,7 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending agentList : ", agentList);
+                // console.log("sending agentList : ", agentList);
                 res.status(statusCode.OK).json(agentList);
             }
         });
@@ -869,12 +1037,12 @@ module.exports = function (app, connection, log) {
                     const msg = { "error": err };
                     res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
                     throw err;
-                } else if (!agentList) {
-                    const msg = { "message": "Agents: Error reading from server" };
+                } else if (!agentList || agentList.length === 0) {
+                    const msg = { "message": "Agents: No agents found" };
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
-                    console.log("sending agentList : ", agentList);
+                    // console.log("sending agentList : ", agentList);
                     res.status(statusCode.OK).json(agentList);
                 }
             });
@@ -890,50 +1058,51 @@ module.exports = function (app, connection, log) {
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
-                    console.log("sending agentList : ", agentList);
+                    // console.log("sending agentList : ", agentList);
                     res.status(statusCode.OK).json(agentList);
                 }
             });
         }
     });
 
-    app.get('/REMS/retrieveTenantParentAndDescription', (req, res) => {
-        var retailers = azureClient.db("pas_software_distribution").collection("retailers");
-        retailers.find({ isTenantRemsServer: true }, {}).toArray(function (err, retailerList) {
+    app.get('/REMS/allAgents', (req, res) => {
+        console.log("Get /REMS/allAgents received : ", req.query)
+
+        const retailers = azureClient.db("pas_software_distribution").collection("retailers");
+        const agents = azureClient.db("pas_software_distribution").collection("agents");
+
+        retailers.find().toArray(function (err, retailerList) {
             if (err) {
-                const msg = { "error": err };
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                const msg = { "error": err }
+                res.status(500).json(msg);
                 throw err;
             } else if (!retailerList) {
-                const msg = { "message": "Agents: Error reading from server" };
-                res.status(statusCode.NO_CONTENT).json(msg);
-            }
-            else {
-                var desiredRetailer = ''
-                retailerList.forEach(retailer => {
-                    retailer.tenants.forEach(tenant => {
-                        if (tenant.retailer_id === req.query["retailerId"]) {
-                            desiredRetailer = {
-                                retailer_id: retailer.retailer_id,
-                                tenant_id: tenant.retailer_id,
-                                description: tenant.description
-                            }
-                        }
-                    });
-                });
-                if (desiredRetailer !== '') {
-                    res.status(statusCode.OK).json(desiredRetailer)
-                } else {
-                    const msg = { "message": "Could not find desired retailer" }
-                    res.status(statusCode.NO_CONTENT).json(msg)
-                }
+                const msg = { "message": "Retailers: Error reading from server" }
+                res.status(204).json(msg);
+            } else {
+                // console.log("Retrieved retailer list");
 
+                let retailerIds = retailerList.map(retailer => retailer.retailer_id);
+
+                agents.find({ retailer_id: { $in: retailerIds } }).toArray(function (err, agentList) {
+                    if (err) {
+                        const msg = { "error": err }
+                        res.status(500).json(msg);
+                        throw err;
+                    } else if (!agentList) {
+                        const msg = { "message": "Agents: Error reading from server" }
+                        res.status(204).json(msg);
+                    } else {
+                        // console.log("Sending agentList : ", agentList);
+                        res.status(200).json(agentList);
+                    }
+                });
             }
         });
     });
 
     app.get('/REMS/stores', (req, res) => {
-        console.log("Get /REMS/stores received : ", req.query)
+        console.log("Get /REMS/stores called with: ", req.query)
         let filters = {}
 
         const agents = azureClient.db("pas_software_distribution").collection("stores");
@@ -1014,82 +1183,10 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
-                console.log("sending storeList : ", storeList)
+                // console.log("sending storeList : ", storeList)
                 res.status(statusCode.OK).json(storeList);
             }
         });
-    });
-
-    app.get('/REMS/retailerConfiguration', (req, res) => {
-        const configurations = azureClient.db("pas_config").collection("configurations");
-        const retailers = azureClient.db("pas_software_distribution").collection("retailers");
-        let query = null
-        if (req.query.isAdmin === 'true') {
-            query = { configType: 'retailer' }
-        } else if (req.query.ccv === 'true') {
-            query = { configType: 'retailer', toshibaOnly: false }
-        } else {
-            query = { configType: 'retailer', toshibaOnly: false, commandCenterOnly: false }
-        }
-
-        configurations.find(query).toArray(function (err, result) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else if (!result) {
-                const msg = { "message": "Config: Error reading from server" }
-                res.status(statusCode.NO_CONTENT).json(msg);
-            } else {
-                const configurationData = result
-
-                let retailerId = ''
-                if (req.query?.retailerId !== undefined) {
-                    retailerId = req.query?.retailerId
-                } else {
-                    res.status(statusCode.INTERNAL_SERVER_ERROR).json('Somehow no retailer id sent')
-                }
-                retailers.find({ retailer_id: retailerId }, {}).toArray(function (err, retailerResult) {
-                    if (err) {
-                        const msg = { "error": err }
-                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                        throw err
-                    } else if (!result) {
-                        const msg = { "message": "Config: Error reading from server" }
-                        res.status(statusCode.NO_CONTENT).json(msg);
-                    }
-                    else {
-                        const configurationResponse = {}
-
-                        configurationData.forEach((config, index) => {
-                            if (_.has(retailerResult[0].configuration, config.configName)) {
-                                // add to response
-                                let tempObj = {
-                                    configName: config.configName,
-                                    configValue: retailerResult[0].configuration[config.configName],
-                                    configValueType: config.configValueType,
-                                    configDisplay: config.configDisplay,
-                                    configCategory: config.configCategory
-                                }
-                                _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
-                            } else {
-                                // add default to response
-                                let tempObj = {
-                                    configName: config.configName,
-                                    configValue: config.configDefaultValue,
-                                    configValueType: config.configValueType,
-                                    configDisplay: config.configDisplay,
-                                    configCategory: config.configCategory
-                                }
-                                _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
-                            }
-                        });
-                        console.log("Found retailer config data: ", retailerResult[0])
-                        res.status(statusCode.OK).json(configurationResponse);
-                    }
-                })
-            }
-        })
     });
 
     app.post('/REMS/retailerConfigurationUpdate', bodyParser.json(), (request, response) => {
@@ -1099,7 +1196,7 @@ module.exports = function (app, connection, log) {
 
         const configQuery = { retailer_id: retailerId };
         const configUpdate = { $set: { configuration: updatedConfiguration } }
-        console.log(request.body)
+        // console.log(request.body)
         request.body.forEach(configItem => {
             receivedConfigItems.push(configItem)
         });
@@ -1218,60 +1315,6 @@ module.exports = function (app, connection, log) {
         })
     });
 
-    app.post('/REMS/userSettingsSubmission', bodyParser.json(), (request, response) => {
-        let updateWasGood = true
-        const receivedObject = request.body
-        const userQuery = { email: receivedObject.email }
-        const updateSet = { $set: { firstName: receivedObject.firstName, lastName: receivedObject.lastName, userDefinedMapConfig: receivedObject.userDefinedMapConfig } }
-
-        const userToUpdate = azureClient.db("pas_config").collection("user");
-        userToUpdate.updateOne(userQuery, updateSet, function (error, updateResult) {
-            if (error) {
-                console.log("Update error: ", error)
-                const msg = { "message": "Error updating retailer configuration" }
-                updateWasGood = false
-                response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
-                throw (error)
-            }
-            if (updateResult) {
-                const responseInfo =
-                    "User with email: " + receivedObject.email + " was updated to be " + receivedObject.firstName + " " + receivedObject.lastName
-                console.log("Update of user was SUCCESS : ", responseInfo)
-            }
-            if (updateWasGood) {
-                response.status(statusCode.OK).json({ "message": "SUCCESS" });
-                return
-            }
-        })
-    });
-
-    app.post('/REMS/userManagementSubmission', bodyParser.json(), (request, response) => {
-        let updateWasGood = true
-        const receivedObject = request.body
-        const userQuery = { email: receivedObject.user.email }
-        const updateSet = { $set: { retailer: receivedObject.retailers, role: receivedObject.roles } }
-
-        const userToUpdate = azureClient.db("pas_config").collection("user");
-        userToUpdate.updateOne(userQuery, updateSet, function (error, updateResult) {
-            if (error) {
-                console.log("Update error : ", error)
-                const msg = { "message": "Error updating retailer configuration" }
-                updateWasGood = false
-                response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
-                throw (error)
-            }
-            if (updateResult) {
-                const responseInfo =
-                    "User with email: " + receivedObject.user.email + " was updated."
-                console.log("Update of user was SUCCESS : ", responseInfo)
-            }
-            if (updateWasGood) {
-                response.status(statusCode.OK).json({ "message": "SUCCESS" });
-                return
-            }
-        })
-    });
-
     app.post('/REMS/toshibaConfigurationUpdate', bodyParser.json(), (request, response) => {
         let updateWasGood = true
         const receivedConfigItems = []
@@ -1370,6 +1413,7 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/store-list', async (req, res) => {
         var results = []
+        console.log('store-list with: ', req.query)
 
         var storeList = azureClient.db("pas_software_distribution").collection("store-list");
         let filters = { retailer_id: req.query["retailerId"] }
@@ -1515,77 +1559,6 @@ module.exports = function (app, connection, log) {
                 output = rems.map(function (item) { return item.retailer_id; })
                 res.status(statusCode.OK).json(output);
             }
-        });
-    });
-    app.get("/REMS/stores", (req, res) => {
-        let filters = { "retailer_id": req.query["retailerId"] }
-        if (req.query["tenantId"] !== undefined) {
-            filters.tenant_id = req.query["tenantId"]
-        }
-        agents.find(filters).toArray(function (err, rems) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else if (!rems) {
-                res.status(statusCode.NO_CONTENT).json(msg);
-            }
-            else {
-                output = []
-                for (x of rems)
-                    output.push(x.storeName)
-                res.status(statusCode.OK).json(output);
-            }
-        });
-    });
-
-    app.get('/REMS/getRoleDetails', (req, res) => {
-        var results = {}
-        var userRoles = azureClient.db("pas_config").collection("user");
-        userRoles.find({ email: { '$regex': req.query.email, $options: 'i' } }).limit(1).toArray(function (err, result) {
-
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            }
-
-            if (result.length > 0) {
-                results = result[0];
-            }
-
-            res.send(results)
-        });
-    });
-
-    app.get('/REMS/getUserDetails', (req, res) => {
-        var results = {}
-        var userDetails = azureClient.db("pas_config").collection("user");
-        userDetails.find({ email: { '$regex': req.query.email, $options: 'i' } }).limit(1).toArray(function (err, result) {
-
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            }
-
-            if (result.length > 0) {
-                results = result[0];
-            }
-
-            res.send(results)
-        });
-    });
-
-    app.get('/REMS/getAllUserDetails', (req, res) => {
-        var userDetails = azureClient.db("pas_config").collection("user");
-        userDetails.find().toArray(function (err, result) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            }
-            res.send(result)
         });
     });
 
