@@ -13,6 +13,7 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 const extract = require('extract-zip')
 var jwt = require('jsonwebtoken');
 const { v1: uuidv1 } = require('uuid');
+const { InsertAuditEntry } = require('../middleware/auditLogger');
 
 require('dotenv').config()
 
@@ -123,7 +124,7 @@ module.exports = function (app, connection, log) {
     })
 
     app.delete("/REMS/deletefile", bodyParser.json(), async (req, res) => {
-        console.log("Delete parmas received : ", req.body, req.query)
+        console.log("Delete params received : ", req.body, req.query)
 
         const retailerId = req.body?.retailerId;
         const id = req.body?.id;
@@ -139,12 +140,14 @@ module.exports = function (app, connection, log) {
 
         // Delete the document from MongoDB where retailer_id and id match
         try {
-            const result = await uploads.deleteOne({ retailer_id: retailerId, id: id });
-            if (result.deletedCount === 1) {
-                res.status(200).send({ message: "Document successfully deleted from the database." });
-            } else {
-                res.status(404).send({ error: "Document not found in the database." });
-            }
+            uploads.findOneAndDelete({ retailer_id: retailerId, id: id }, function (err, result) {
+                InsertAuditEntry('delete', result.value, 'delete', req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'uploads' })
+                if (result) {
+                    res.status(200).send({ message: "Document successfully deleted from the database." });
+                } else {
+                    res.status(404).send({ error: "Document not found in the database." });
+                }
+            });
         } catch (error) {
             res.status(500).send({ error: "An error occurred when trying to delete the document from the database." });
             console.error(error);
@@ -298,6 +301,8 @@ module.exports = function (app, connection, log) {
 
                     // once file is uploaded, make a record in the uploads collection
                     uploads.insertOne(newFile);
+                    InsertAuditEntry('insert', null, newFile, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'uploads' })
+
                     res.writeHead(200, { 'content-type': 'text/plain' });
                     res.write('received upload:\n\n');
                     res.send()
@@ -357,7 +362,8 @@ module.exports = function (app, connection, log) {
     });
 
     app.get("/REMS/deleteExistingList", (req, res) => {
-        azureClient.db("pas_software_distribution").collection("store-list").deleteOne({ "_id": ObjectId(req.query.id) }, function (err, result) {
+        azureClient.db("pas_software_distribution").collection("store-list").findOneAndDelete({ "_id": ObjectId(req.query.id) }, function (err, result) {
+            InsertAuditEntry('delete', result.value, 'delete', req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'store-list' })
             res.sendStatus(200)
         })
     })
@@ -450,7 +456,12 @@ module.exports = function (app, connection, log) {
             }
 
             if (req.query["tenantId"] === undefined) {
-                deployConfig.updateOne({ "name": req.body.name, "retailer_id": retailerId }, { "$set": toInsert }, { upsert: true }, function (err, result) {
+                deployConfig.findOneAndUpdate({ "name": req.body.name, "retailer_id": retailerId }, { "$set": toInsert }, { upsert: true }, function (err, result) {
+                    if (result.value !== null) {
+                        InsertAuditEntry('update', result.value, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
+                    } else {
+                        InsertAuditEntry('insert', null, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
+                    }
                     if (err) {
                         const msg = { "error": err }
                         // TODO: why is this commented out?
@@ -459,7 +470,12 @@ module.exports = function (app, connection, log) {
                     }
                 });
             } else {
-                deployConfig.updateOne({ "name": req.body.name, "retailer_id": retailerId, "tenant_id": req.query["tenantId"] }, { "$set": toInsert }, { upsert: true }, function (err, result) {
+                deployConfig.findOneAndUpdate({ "name": req.body.name, "retailer_id": retailerId, "tenant_id": req.query["tenantId"] }, { "$set": toInsert }, { upsert: true }, function (err, result) {
+                    if (result.value !== null) {
+                        InsertAuditEntry('update', result.value, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
+                    } else {
+                        InsertAuditEntry('insert', null, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
+                    }
                     if (err) {
                         const msg = { "error": err }
                         // TODO: why is this commented out?
@@ -532,13 +548,14 @@ module.exports = function (app, connection, log) {
             filter.tenant_id = req.query["tenantId"]
         }
         const configs = azureClient.db("pas_software_distribution").collection("deploy-config");
-        configs.deleteOne(filter, function (err, result) {
+        configs.findOneAndDelete(filter, function (err, result) {
             if (err) {
                 const msg = { "error": err }
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                 return;
             } else {
                 const msg = { "message": "Deploy-Config deleted successfully" }
+                InsertAuditEntry('delete', result.value, 'delete', req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
                 res.status(statusCode.OK).json(msg);
                 return;
             }
@@ -546,13 +563,17 @@ module.exports = function (app, connection, log) {
     });
 
     app.get("/REMS/setArchive", (req, res) => {
-        azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "uuid": req.query.uuid }, { "$set": { "archived": (req.query.archived) } })
-        res.sendStatus(200)
+        azureClient.db("pas_software_distribution").collection("uploads").findOneAndUpdate({ "uuid": req.query.uuid }, { "$set": { "archived": (req.query.archived) } }, function (err, result) {
+            InsertAuditEntry('update', result.value, { "$set": { "archived": (req.query.archived) } }, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'uploads' })
+            res.sendStatus(200)
+        })
     });
 
     app.get("/REMS/setForProd", (req, res) => {
-        azureClient.db("pas_software_distribution").collection("uploads").updateOne({ "uuid": req.query.uuid }, { "$set": { "forProd": (req.query.forProd) } })
-        res.sendStatus(200)
+        azureClient.db("pas_software_distribution").collection("uploads").findOneAndUpdate({ "uuid": req.query.uuid }, { "$set": { "forProd": (req.query.forProd) } }, function (err, result) {
+            InsertAuditEntry('update', result.value, { "$set": { "forProd": (req.query.forProd) } }, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'uploads' })
+            res.sendStatus(200)
+        })
     });
 
     app.get("/REMS/getAttendedLanes", (req, res) => {
@@ -789,18 +810,12 @@ module.exports = function (app, connection, log) {
                         maxId = maxResults[0].id;
                     }
 
-                    /* I think this maxID++ was causing us to increment the id by 2. We add one here and one when I assign the id
-                    to the record in the next section below.  I am going to comment out for now, but it can be removed
-                    later. I just left it here so I could add this explanation. :) */
-                    //maxId++;
-
                     // Replace line endings with commas and proceed. This allows the user to use a list from excell ect.
                     storeList = storeList.replace(/(?:\r\n|\r|\n)/g, ',');
                     // Incase there is a , at the end of a line.
                     storeList = storeList.replace(/(?:,)+/g, ',');
 
                     var indx = 0;
-
                     storeList.split(',').forEach(val => {
 
                         /* The line break substitution above may add an extra comma
@@ -861,6 +876,7 @@ module.exports = function (app, connection, log) {
                                     res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                                     return
                                 }
+                                InsertAuditEntry('insert', null, newRecords, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deployments' })
                             });
                             const msg = { "message": "Success" }
                             res.status(statusCode.OK).json(msg);
@@ -880,8 +896,6 @@ module.exports = function (app, connection, log) {
         console.log("Get /REMS/stores/alerts received : ", req.query)
         const alerts = azureClient.db("pas_availability").collection("alerts");
         if (req.query["tenantId"] === undefined) {
-            //        retailerDetails.find({retailer_id: req.query.id}).limit(1).toArray(function (err, result) {
-
             alerts.find({ retailer_id: req.query.retailerId, storeName: req.query.storeName }).toArray(function (err, pasAvailability) {
                 if (err) {
                     const msg = { "error": err }
@@ -1253,11 +1267,8 @@ module.exports = function (app, connection, log) {
                         });
                     }
 
-
-
-
                     // DO UPDATE
-                    retailers.updateOne(configQuery, configUpdate, function (error, updateResult) {
+                    retailers.findOneAndUpdate(configQuery, configUpdate, function (error, updateResult) {
                         if (error) {
                             console.log("Update error : ", error)
                             const msg = { "message": "Error updating retailer configuration" }
@@ -1266,17 +1277,17 @@ module.exports = function (app, connection, log) {
                         }
 
                         if (updateResult) {
-                            const responseInfo =
-                                " [ Retailer: " + retailerId +
-                                " configs: " + updateResult +
-                                " ]";
+                            // const responseInfo =
+                            //     " [ Retailer: " + retailerId +
+                            //     " configs: " + updateResult +
+                            //     " ]";
 
-                            console.log("Update Retailer Configuration SUCCESS : ", responseInfo)
+                            // console.log("Update Retailer Configuration SUCCESS : ", responseInfo)
+                            InsertAuditEntry('update', updateResult.value, configUpdate, request.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'retailers' })
                             const msg = { "message": "SUCCESS" }
                             response.status(statusCode.OK).json(msg);
                             return;
                         }
-
                     })
                 }
             })
@@ -1308,7 +1319,7 @@ module.exports = function (app, connection, log) {
                     }
                     _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
                 });
-                console.log("Found admin config data: ", configurationResponse)
+                // console.log("Found admin config data: ", configurationResponse)
                 res.status(statusCode.OK).json(configurationResponse);
 
             }
@@ -1336,7 +1347,7 @@ module.exports = function (app, connection, log) {
 
                 const configToUpdate = azureClient.db("pas_config").collection("configurations");
                 // DO UPDATE
-                configToUpdate.updateOne(configQuery, configUpdate, function (error, updateResult) {
+                configToUpdate.findOneAndUpdate(configQuery, configUpdate, function (error, updateResult) {
                     if (error) {
                         console.log("Update error : ", error)
                         const msg = { "message": "Error updating retailer configuration" }
@@ -1346,12 +1357,13 @@ module.exports = function (app, connection, log) {
                     }
 
                     if (updateResult) {
-                        const responseInfo =
-                            " [ ConfigName: " + configItem.configName +
-                            " Value: " + updateResult +
-                            " ]";
+                        // const responseInfo =
+                        //     " [ ConfigName: " + configItem.configName +
+                        //     " Value: " + updateResult +
+                        //     " ]";
 
-                        console.log("Update Toshiba Administrative Configuration SUCCESS : ", responseInfo)
+                        // console.log("Update Toshiba Administrative Configuration SUCCESS : ", responseInfo)
+                        InsertAuditEntry('update', updateResult.value, configUpdate, request.cookies.user, { location: 'pas_mongo_database', database: 'pas_config', collection: 'configurations' })
                     }
                 })
             });
@@ -1371,7 +1383,7 @@ module.exports = function (app, connection, log) {
         const deployQuery = { retailer_id: request.query.retailerId, storeName: storeName, id: parseInt(id), status: { $in: ["initial", "Initial", "Pending", "pending"] } };
         const deployUpdate = { $set: { status: newStatus } }
         const deploys = azureClient.db("pas_software_distribution").collection("deployments")
-        deploys.updateOne(deployQuery, deployUpdate, function (error, upResult) {
+        deploys.findOneAndUpdate(deployQuery, deployUpdate, function (error, upResult) {
             if (error) {
                 console.log("Update error : ", error)
                 const msg = { "message": "Error Canceling Deployment" }
@@ -1398,7 +1410,8 @@ module.exports = function (app, connection, log) {
                     return;
                 }
                 else {
-                    console.log("Cancel Deployment SUCCESS : ", responseInfo)
+                    // console.log("Cancel Deployment SUCCESS : ", responseInfo)
+                    InsertAuditEntry('update', upResult.value, deployUpdate, request.cookies.user, { location: 'pas_mongo_database', database: 'pas_config', collection: 'deployments' })
                     const msg = { "message": "SUCCESS" }
                     response.status(statusCode.OK).json(msg);
                     return;
@@ -1495,13 +1508,14 @@ module.exports = function (app, connection, log) {
                 }
                 const storeListUpdateAgent = { $set: { agents: req.body.agents } }
 
-                deployConfig.updateOne(storeListUpdateQuery, storeListUpdateAgent, function (err, result) {
+                deployConfig.findOneAndUpdate(storeListUpdateQuery, storeListUpdateAgent, function (err, result) {
                     if (err) {
                         const msg = { "error": err }
                         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                         throw err;
                     } else {
                         const msg = { "message": "Success" }
+                        InsertAuditEntry('update', result.value, storeListUpdateAgent, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'store-list' })
                         res.status(statusCode.OK).json(msg);
                     }
                 });
@@ -1532,6 +1546,7 @@ module.exports = function (app, connection, log) {
                         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                         throw err;
                     } else {
+                        InsertAuditEntry('insert', null, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'store-list' })
                         const msg = { "message": "Success" }
                         res.status(statusCode.OK).json(msg);
                     }
@@ -1542,9 +1557,6 @@ module.exports = function (app, connection, log) {
 
     app.get('/REMS/retailerids', (req, res) => {
         console.log("Get /REMS/rems received : ", req.query)
-        var results = [];
-        let filters = {}
-
         const agents = azureClient.db("pas_software_distribution").collection("rems");
         agents.find({}, { projection: { retailer_id: true, _id: false } }).toArray(function (err, rems) {
             if (err) {

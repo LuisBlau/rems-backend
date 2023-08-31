@@ -3,58 +3,23 @@ const atob = require("atob")
 const btoa = require("btoa")
 var bodyParser = require('body-parser');
 const mongodb = require("mongodb")
-const mssql = require('mssql');
-const getAdbConnection = require("../assetdb")
 const { ServiceBusClient } = require("@azure/service-bus");
+const { InsertAuditEntry } = require('../middleware/auditLogger');
+
 const sbClient = new ServiceBusClient("Endpoint=sb://remscomm.servicebus.windows.net/;SharedAccessKeyName=dashboard-express;SharedAccessKey=v8rJ+T/HqTWa3OoWBvGlnWEBjyMBD0+7V+ASbL/Wluw=");
+
 var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
-function formatCount(resp) {
-  count_dict = []
-  return resp.map(element => (({
-    "name": element["property_value"],
-    "value": element["count"]
-  })))
-
-}
-function formatClauses(req) {
-  const timeClause = req.get("hours") > 0 ? sqlString.format('and Snapshots.logtime >= ( current_date - interval \'? hours\' ) ', parseInt(req.get("hours"))) : ''
-  const storeClause = req.get("store") > 0 ? sqlString.format('and Snapshots.store = ? ', req.get("store")) : ''
-  return { timeClause, storeClause }
-}
 
 module.exports = function (app, connection, log) {
   app.post('/sendSNMPRequest', bodyParser.json(), (req, res) => {
     console.log("New SNMP Request set");
     console.log(JSON.stringify(req.body))
     const sender = sbClient.createSender(req.body["retailer"].toLowerCase());
+    InsertAuditEntry('sendMessage', null, req.body, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: req.body["retailer"].toLowerCase() })
     res.send(sender.sendMessages({ "body": req.body }));
   })
-  app.get('/registers/assets', (req, res) => {
-    let retailerCollection = azureClient.db("pas_software_distribution").collection("retailers");
-    retailerCollection.findOne({ "retailer_id": req.cookies["retailerId"] }, async function (err, result) {
-      if (!("assetTableName" in result)) {
-        res.send(403)
-        return
-      }
-      let query = " SELECT * FROM " + result["assetTableName"] + "_Inventory"
-      if ("store" in req.query) {
-        query += sqlString.format(" WHERE Store = ?", req.query["store"])
-      }
-      if ("page" in req.query) {
-        query += " ORDER BY MAC_Address OFFSET " + req.query["page"] * 100 + "ROWS FETCH NEXT 100 ROWS ONLY"
-      } else {
-        query += " ORDER BY MAC_Address OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY"
-      }
-      getAdbConnection().then(async function cb(adbConn) {
-        let resultSet = await adbConn.request().query(query)
-        res.send(resultSet.recordset)
-        adbConn.close()
-      })
 
-    })
-
-  })
   app.get('/getSNMPConfig', (req, res) => {
     let snmpDatabase = azureClient.db("pas_software_distribution").collection("config-files");
     if (req.query["sName"] != undefined && req.query["aName"] != undefined) {
@@ -95,30 +60,6 @@ module.exports = function (app, connection, log) {
       })
   })
 
-  app.get('/registers/reloads/', (req, res) => {
-    const { storeClause, timeClause } = formatClauses(req)
-
-
-    connection.query(sqlString.format('SELECT COUNT(*)' +
-      'FROM Registers ' +
-      'WHERE Registers.property_id = \'12\' ' +
-      storeClause +
-      timeClause +
-      'and Registers.logtime >= ( current_date - interval \'? days\' )',
-      [req.params["lastdays"]]),
-      (err, resp, fields) => {
-        if (err) {
-          log.error(err)
-          res.send(err)
-        } else {
-          log.info(`GET ${req.originalUrl}`)
-          res.send({
-            "count": resp[0]["COUNT(*)"]
-          })
-        }
-      })
-  })
-
   app.get("/registers/versions", async (req, res) => {
     let versions = {}
     if (req.query["tenantId"] === undefined) {
@@ -143,55 +84,6 @@ module.exports = function (app, connection, log) {
 
   })
 
-  app.get('/registers/pinpad', (req, res) => {
-    connection.query('SELECT property_value, count(property_value) ' +
-      'FROM Registers INNER JOIN Properties ' +
-      'ON Registers.property_id = Properties.property_id ' +
-      'WHERE Registers.property_id = 9 GROUP BY Registers.property_value',
-      (err, resp, fields) => {
-        if (err) {
-          log.error(err)
-          res.send(err)
-        } else {
-          log.info(`GET ${req.originalUrl}`)
-          res.send(formatCount(resp))
-        }
-      })
-  })
-
-  app.get('/registers/uiState', (req, res) => {
-    connection.query('SELECT property_value, count(property_value) ' +
-      'FROM Registers INNER JOIN Properties ' +
-      'ON Registers.property_id = Properties.property_id ' +
-      'WHERE Registers.property_id = 1 GROUP BY Registers.property_value',
-      (err, resp, fields) => {
-        if (err) {
-          log.error(err)
-          res.send(JSON.stringify(err))
-        } else {
-          log.info(`GET ${req.originalUrl}`)
-          res.send(formatCount(resp))
-        }
-      })
-  })
-
-  app.get('/registers/scanner:num', (req, res) => {
-    const property_id = req.params["num"] === 1 ? 2 : 3
-    connection.query(sqlString.format('SELECT property_value, count(property_value) FROM Registers ' +
-      'INNER JOIN Properties ON Registers.property_id = Properties.property_id ' +
-      'WHERE Registers.property_id = ? ' +
-      'GROUP BY property_value ', property_id),
-      (err, resp, fields) => {
-        if (err) {
-          log.error(err)
-          res.send(JSON.stringify(err))
-        } else {
-          log.info(`GET ${req.originalUrl}`)
-          log.info(formatCount(resp['rows']))
-          res.send(formatCount(resp['rows']))
-        }
-      })
-  })
   app.get('/registers/extracts', (req, res) => {
     console.log("get /registers/extracts with: ", req.query)
     if (req.query["tenantId"] === null) {
@@ -283,6 +175,7 @@ module.exports = function (app, connection, log) {
       }
     };
     const sender = sbClient.createSender(j.Retailer.toLowerCase());
+    InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: j.Retailer.toLowerCase() })
     res.send(sender.sendMessages(msgSent));
   })
 
@@ -299,6 +192,7 @@ module.exports = function (app, connection, log) {
       }
     };
     const sender = sbClient.createSender(req.query["retailerId"].toLowerCase());
+    InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: req.query["retailerId"].toLowerCase() })
     res.send(sender.sendMessages(msgSent));
   })
 
@@ -311,6 +205,7 @@ module.exports = function (app, connection, log) {
       }
     };
     const sender = sbClient.createSender(req.body["retailer"].toLowerCase());
+    InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: req.body["retailer"].toLowerCase() })
     res.send(sender.sendMessages(msgSent));
   })
 
@@ -394,6 +289,7 @@ module.exports = function (app, connection, log) {
       }
     };
     const sender = sbClient.createSender(j.Retailer.toLowerCase());
+    InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: j.Retailer.toLowerCase() })
     res.send(sender.sendMessages(msgSent));
   });
 
@@ -406,6 +302,7 @@ module.exports = function (app, connection, log) {
       }
     };
     const sender = sbClient.createSender(req.cookies["retailerId"].toLowerCase());
+    InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: req.cookies["retailerId"].toLowerCase() })
     res.send(sender.sendMessages(msgSent));
   });
 
@@ -421,6 +318,7 @@ module.exports = function (app, connection, log) {
       }
     };
     const sender = sbClient.createSender(j.Retailer.toLowerCase());
+    InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: j.Retailer.toLowerCase() })
     res.send(sender.sendMessages(msgSent));
   });
 
@@ -434,6 +332,7 @@ module.exports = function (app, connection, log) {
       }
     };
     const sender = sbClient.createSender(req.query["retailer_id"].toLowerCase());
+    InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: req.query["retailer_id"].toLowerCase() })
     res.send(sender.sendMessages(msgSent));
   })
 

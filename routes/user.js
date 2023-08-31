@@ -1,9 +1,11 @@
 const mongodb = require("mongodb")
 const statusCode = require('http-status-codes').StatusCodes
 var bodyParser = require('body-parser');
+const { InsertAuditEntry } = require("../middleware/auditLogger");
 
 var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
+var dataDestination = { location: 'pas_mongo_database', database: 'pas_config', collection: 'user' }
 
 module.exports = function (app) {
     app.post('/user/settingsSubmission', bodyParser.json(), (request, response) => {
@@ -28,6 +30,7 @@ module.exports = function (app) {
             }
             if (updateWasGood) {
                 response.status(statusCode.OK).json({ "message": "SUCCESS" });
+                InsertAuditEntry('update', updateResult.value, updateSet, request.cookies.user, dataDestination)
                 return
             }
         })
@@ -40,7 +43,7 @@ module.exports = function (app) {
         const updateSet = { $set: { retailer: receivedObject.retailers, role: receivedObject.roles } }
 
         const userToUpdate = azureClient.db("pas_config").collection("user");
-        userToUpdate.updateOne(userQuery, updateSet, function (error, updateResult) {
+        userToUpdate.findOneAndUpdate(userQuery, updateSet, function (error, updateResult) {
             if (error) {
                 console.log("Update error : ", error)
                 const msg = { "message": "Error updating retailer configuration" }
@@ -49,9 +52,7 @@ module.exports = function (app) {
                 throw (error)
             }
             if (updateResult) {
-                const responseInfo =
-                    "User with email: " + receivedObject.user.email + " was updated."
-                console.log("Update of user was SUCCESS : ", responseInfo)
+                InsertAuditEntry('update', updateResult.value, updateSet, request.cookies.user, dataDestination)
             }
             if (updateWasGood) {
                 response.status(statusCode.OK).json({ "message": "SUCCESS" });
@@ -82,6 +83,7 @@ module.exports = function (app) {
                         throw err;
                     } else {
                         const msg = { "message": "Success" }
+                        InsertAuditEntry('insert', null, newUserToInsert, req.cookies.user, dataDestination)
                         res.status(statusCode.OK).json(msg);
                     }
                     res.send()
