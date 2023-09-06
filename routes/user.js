@@ -61,17 +61,54 @@ module.exports = function (app) {
         })
     });
 
-    app.post('/user/insert', (req, res) => {
-        console.log('/user/insert with: ', req.query)
+    app.delete("/user/delete", bodyParser.json(), async (req, res) => {
+        console.log("/user/delete received with: ", req.query)
+        const email = req.query?.email;
+        const authUserEmail = req.query?.authUserEmail;
+        var authUser = await azureClient.db("pas_config").collection("user").findOne({ email: authUserEmail });
+        if (authUser && authUser?.role?.length > 0) {
+            if (!authUser?.role?.includes('toshibaAdmin')) {
+                res.status(401).send({ error: "Requesting user cannot delete users." });
+                return;
+            }
+        } else {
+            res.status(401).send({ error: "Logged user not found" });
+            return;
+        }
+
+        if (!email) {
+            res.status(400).send({ error: "Bad request, email is missing." });
+            return;
+        }
+
         var users = azureClient.db("pas_config").collection("user");
-        users.findOne({ email: req.query["userEmail"] }).then((result) => {
+
+        try {
+            const result = await users.deleteOne({ email: email });
+            if (result.deletedCount === 1) {
+                res.status(200).send({ message: "User successfully deleted from the database." });
+            } else {
+                res.status(404).send({ error: "User not found in the database." });
+            }
+        } catch (error) {
+            res.status(500).send({ error: "An error occurred when trying to delete the user from the database." });
+            console.error(error);
+        }
+    });
+
+    app.post('/user/insert', bodyParser.json(), (req, res) => {
+        console.log('/user/insert with: ', req.body)
+        var users = azureClient.db("pas_config").collection("user");
+        users.findOne({ email: req.body["userEmail"] }).then((result) => {
             if (result !== null) {
                 const msg = { "error": 'User already exists!' }
                 res.status(statusCode.CONFLICT).json(msg)
                 res.send()
             } else {
                 var newUserToInsert = {
-                    email: req.query["userEmail"],
+                    email: req.body.userEmail,
+                    firstName: req.body?.firstName,
+                    lastName: req.body?.lastName,
                     retailer: [],
                     role: [],
                     userDefinedMapConfig: ""
