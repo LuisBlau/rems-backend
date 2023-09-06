@@ -84,8 +84,9 @@ module.exports = function (app) {
         var users = azureClient.db("pas_config").collection("user");
 
         try {
-            const result = await users.deleteOne({ email: email });
-            if (result.deletedCount === 1) {
+            const result = await users.findOneAndDelete({ email: email });
+            if (result.value !== null) {
+                InsertAuditEntry('delete', result.value, 'delete', req.cookies.user, dataDestination)
                 res.status(200).send({ message: "User successfully deleted from the database." });
             } else {
                 res.status(404).send({ error: "User not found in the database." });
