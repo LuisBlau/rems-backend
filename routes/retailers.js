@@ -69,32 +69,39 @@ module.exports = function (app) {
                         res.status(statusCode.NO_CONTENT).json(msg);
                     } else {
                         const configurationResponse = {}
-                        retailerResult.forEach(retailer => {
-                            configurationData.forEach((config, index) => {
-                                if (_.has(retailer.configuration, config.configName)) {
-                                    // add to response
-                                    let tempObj = {
-                                        configName: config.configName,
-                                        configValue: retailer.configuration[config.configName],
-                                        configValueType: config.configValueType,
-                                        configDisplay: config.configDisplay,
-                                        configCategory: config.configCategory
-                                    }
-                                    _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
-                                } else {
-                                    // add default to response
-                                    let tempObj = {
-                                        configName: config.configName,
-                                        configValue: config.configDefaultValue,
-                                        configValueType: config.configValueType,
-                                        configDisplay: config.configDisplay,
-                                        configCategory: config.configCategory
-                                    }
-                                    _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
+                        const retailer_filters = { ...retailerResult?.[0]?.configuration };
+                        retailerResult.forEach((item) => {
+                            for (let key in item.configuration) {
+                                const value = item.configuration[key];
+                                if (value === true || value === 'true') {
+                                    retailer_filters[key] = true;
                                 }
-                            });
+                            }
                         });
-                        // console.log("Found retailer config data: ", retailerResult[0])
+                        const retailer = { configuration: retailer_filters }
+                        configurationData.forEach((config, index) => {
+                            if (_.has(retailer.configuration, config.configName)) {
+                                // add to response
+                                let tempObj = {
+                                    configName: config.configName,
+                                    configValue: retailer.configuration[config.configName],
+                                    configValueType: config.configValueType,
+                                    configDisplay: config.configDisplay,
+                                    configCategory: config.configCategory
+                                }
+                                _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
+                            } else {
+                                // add default to response
+                                let tempObj = {
+                                    configName: config.configName,
+                                    configValue: config.configDefaultValue,
+                                    configValueType: config.configValueType,
+                                    configDisplay: config.configDisplay,
+                                    configCategory: config.configCategory
+                                }
+                                _.set(configurationResponse, ['configuration', [index], config.configName], tempObj)
+                            }
+                        });
                         res.status(statusCode.OK).json(configurationResponse);
                     }
                 })
