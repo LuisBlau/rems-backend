@@ -289,7 +289,7 @@ module.exports = function (app, connection, log) {
       }
     };
     const sender = sbClient.createSender(j.Retailer.toLowerCase());
-    InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: j.Retailer.toLowerCase() })
+    // InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: j.Retailer.toLowerCase() })
     res.send(sender.sendMessages(msgSent));
   });
 
