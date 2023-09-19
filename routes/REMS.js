@@ -949,26 +949,6 @@ module.exports = function (app, connection, log) {
         });
     });
 
-    app.get('/REMS/storeInfo', (req, res) => {
-        console.log("Get /REMS/storeInfo received : ", req.query)
-
-        const stores = azureClient.db("pas_software_distribution").collection("stores");
-        stores.find({ retailer_id: req.query["retailerId"], storeName: req.query["storeName"] }, {}).toArray(function (err, rems) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else if (!rems) {
-                const msg = { "message": "Rems: Error reading from server" }
-                res.status(statusCode.NO_CONTENT).json(msg);
-            }
-            else {
-                // console.log("sending store info : ", rems)
-                res.status(statusCode.OK).json(rems);
-            }
-        });
-    });
-
     app.get('/REMS/agents', (req, res) => {
         console.log("Get /REMS/agents received : ", req.query);
         let filters = {}
@@ -1111,94 +1091,6 @@ module.exports = function (app, connection, log) {
                         res.status(200).json(agentList);
                     }
                 });
-            }
-        });
-    });
-
-    app.get('/REMS/stores', (req, res) => {
-        console.log("Get /REMS/stores called with: ", req.query)
-        let filters = {}
-
-        const agents = azureClient.db("pas_software_distribution").collection("stores");
-        const retailers = azureClient.db("pas_software_distribution").collection("retailers");
-        if (req.query["isTenant"] === 'false') {
-            agents.find({ retailer_id: req.query["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
-                if (err) {
-                    const msg = { "error": err }
-                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                    throw err
-                } else if (!agentList) {
-                    const msg = { "message": "Agents: Error reading from server" }
-                    res.status(statusCode.NO_CONTENT).json(msg);
-                }
-                else {
-                    res.status(statusCode.OK).json(agentList);
-                }
-            });
-        } else if (req.query["tenantId"] !== undefined) {
-            agents.find({ retailer_id: req.query["retailerId"], tenant_id: req.query["tenantId"], ...filters }, {}).toArray(function (err, agentList) {
-                if (err) {
-                    const msg = { "error": err }
-                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                    throw err
-                } else if (!agentList) {
-                    const msg = { "message": "Agents: Error reading from server" }
-                    res.status(statusCode.NO_CONTENT).json(msg);
-                }
-                else {
-                    res.status(statusCode.OK).json(agentList);
-                }
-            });
-        } else {
-            retailers.find({ isTenantRemsServer: true }).toArray(function (err, tenantList) {
-                if (err) {
-                    const msg = { "error": err }
-                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                    throw err
-                } else if (!tenantList) {
-                    const msg = { "message": "Tenants: Error reading from server" }
-                    res.status(statusCode.NO_CONTENT).json(msg)
-                } else {
-                    tenantList.forEach(tenantBearingRemsServer => {
-                        tenantBearingRemsServer.tenants.forEach(tenant => {
-                            if (tenant.retailer_id === req.query["retailerId"]) {
-                                agents.find({ retailer_id: tenantBearingRemsServer.retailer_id, tenant_id: tenant.retailer_id }).toArray(function (err, agentList) {
-                                    if (err) {
-                                        const msg = { "error": err }
-                                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                                        throw err
-                                    } else if (!agentList) {
-                                        const msg = { "message": "Agents: Error reading from server" }
-                                        res.status(statusCode.NO_CONTENT).json(msg);
-                                    }
-                                    else {
-                                        res.status(statusCode.OK).json(agentList)
-                                    }
-                                })
-                            }
-                        })
-                    })
-                }
-            })
-        }
-    });
-
-    app.get('/REMS/allStores', (req, res) => {
-        console.log("Get /REMS/allStores received : ", req.query)
-
-        const stores = azureClient.db("pas_software_distribution").collection("stores");
-        stores.find().toArray(function (err, storeList) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else if (!storeList) {
-                const msg = { "message": "Stores: Error reading from server" }
-                res.status(statusCode.NO_CONTENT).json(msg);
-            }
-            else {
-                // console.log("sending storeList : ", storeList)
-                res.status(statusCode.OK).json(storeList);
             }
         });
     });
@@ -1591,30 +1483,4 @@ module.exports = function (app, connection, log) {
             res.send(results)
         });
     });
-
-    app.get('/REMS/getAllRetailerDetails', (req, res) => {
-        var retailersDetails = azureClient.db("pas_software_distribution").collection("retailers");
-        retailersDetails.find().toArray(function (err, result) {
-            var retailers = []
-            result.forEach(retailerObject => {
-                if (retailerObject.isTenantRemsServer !== true && retailerObject.isTenant !== true) {
-                    retailers.push(retailerObject)
-                } else {
-                    if (retailerObject.isTenantRemsServer === true) {
-                        retailerObject.tenants.forEach(tenant => {
-                            retailers.push(_.find(result, x => x.retailer_id === tenant.retailer_id))
-                        });
-                    }
-                }
-            });
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else {
-                res.send(retailers)
-            }
-        });
-    });
-
 }

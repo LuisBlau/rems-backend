@@ -1,12 +1,73 @@
 const mongodb = require("mongodb")
 var bodyParser = require('body-parser');
 const _ = require('lodash');
+const { InsertAuditEntry } = require("../middleware/auditLogger");
 const statusCode = require('http-status-codes').StatusCodes
 
 var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
 azureClient.connect();
 
 module.exports = function (app) {
+
+    app.post('/retailers/insertTenant', bodyParser.json(), (req, res) => {
+        console.log('/retailer/insertTenant with: ', req.body)
+        let updateWasGood = true
+        var retailers = azureClient.db("pas_software_distribution").collection("retailers");
+        retailers.findOne({ retailer_id: req.body["retailer_id"] }).then((result) => {
+            if (result !== null) {
+                const msg = { "error": 'Tenant/Retailer already exists!' }
+                updateWasGood = false
+                res.status(statusCode.CONFLICT).json(msg)
+                res.send()
+            } else {
+                var newTenantToInsert = {
+                    retailer_id: req.body.retailer_id,
+                    description: req.body?.description,
+                    configuration: [],
+                    isTenant: true
+                }
+
+                retailers.insertOne(newTenantToInsert, function (err, result) {
+                    if (err) {
+                        const msg = { "error": err }
+                        updateWasGood = false
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        throw err;
+                    } else {
+                        InsertAuditEntry('insert', null, newTenantToInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'retailers' })
+                    }
+                })
+
+                let parentTenants = []
+                retailers.find({ retailer_id: req.body.parentRemsServerId }).toArray((err, result) => {
+                    if (result[0]?.tenants?.length > 0) {
+                        parentTenants = result[0]?.tenants
+                    }
+                    parentTenants.push({
+                        retailer_id: req.body.retailer_id,
+                        description: req.body.description
+                    })
+                    retailers.findOneAndUpdate({ retailer_id: req.body.parentRemsServerId }, { $set: { tenants: parentTenants, isTenantRemsServer: true } }, (err, result) => {
+                        if (err) {
+                            console.log("Update error : ", err)
+                            const msg = { "message": "Error updating retailer" }
+                            updateWasGood = false
+                            res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                            throw (err)
+                        }
+                        if (result) {
+                            InsertAuditEntry('update', result.value, { $set: { tenants: parentTenants, isTenantRemsServer: true } }, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'retailers' })
+                        }
+                        if (updateWasGood) {
+                            res.status(statusCode.OK).json({ "message": "SUCCESS" });
+                            return
+                        }
+                    })
+
+                })
+            }
+        })
+    })
 
     app.get('/retailers/retrieveTenantParentAndDescription', (req, res) => {
         var retailers = azureClient.db("pas_software_distribution").collection("retailers");
@@ -42,6 +103,116 @@ module.exports = function (app) {
             }
         });
     });
+
+    app.get('/retailers/getRemsStoreInfo', async (req, res) => {
+        var retailers = azureClient.db("pas_software_distribution").collection("retailers");
+        var stores = azureClient.db("pas_software_distribution").collection("stores");
+        var selectedRetailer = await retailers.findOne({ retailer_id: req.query["retailerId"] })
+        if (selectedRetailer?.isTenant === true) {
+            // is tenant
+            var parentRemsServer = await retailers.findOne({ tenants: { $elemMatch: { retailer_id: req.query["retailerId"] } } })
+            var remsServerStores = []
+            stores.find({ retailer_id: parentRemsServer.retailer_id }).forEach(function (result) {
+                result.id = result._id
+                remsServerStores.push(result)
+            }).then(() => {
+                res.status(statusCode.OK).json({
+                    remsInfo: parentRemsServer,
+                    stores: remsServerStores
+                })
+            })
+        } else {
+            // is not tenant
+            var remsServer = await retailers.findOne({ retailer_id: req.query["retailerId"] })
+            var remsServerStores = []
+            stores.find({ retailer_id: req.query["retailerId"] }).forEach(function (result) {
+                result.id = result._id
+                remsServerStores.push(result)
+            }).then(() => {
+                res.status(statusCode.OK).json({
+                    remsInfo: remsServer,
+                    stores: remsServerStores
+                })
+            })
+        }
+    });
+
+    app.delete('/retailers/deleteTenant', async (req, res) => {
+        console.log("/retailers/deleteTenant received with: ", req.query)
+        const retailers = azureClient.db("pas_software_distribution").collection("retailers")
+        const stores = azureClient.db('pas_software_distribution').collection("stores")
+
+        // First, handle removing tenant from all stores
+        stores.find({ tenant_id: req.query["tenantRetailerId"] }).forEach(function (result) {
+            if (!result) {
+                const msg = { "message": "Tenant: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            } else {
+                stores.findOneAndUpdate({ retailer_id: result.retailer_id, tenant_id: result.tenant_id, storeName: result.storeName }, { $set: { tenant_id: '' } }, function (err, updateResult) {
+                    if (err) {
+                        const msg = { "error": err }
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        throw err
+                    } else if (!updateResult) {
+                        const msg = { "message": "Store: Error reading from server" }
+                        res.status(statusCode.NO_CONTENT).json(msg);
+                    } else {
+                        InsertAuditEntry('update', updateResult.value, { $set: { tenant_id: '' } }, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'stores' })
+                    }
+                })
+            }
+        })
+
+        // Then handle deleting the retailer entry for the tenant
+        retailers.findOneAndDelete({ retailer_id: req.query["tenantRetailerId"] }, function (err, result) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!result) {
+                const msg = { "message": "Tenant: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            } else {
+                InsertAuditEntry('delete', result.value, 'delete', req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'retailers' })
+            }
+        })
+
+        // Finally, remove the tenant from the Parent REMS server entry
+        retailers.findOne({ "tenants": { $elemMatch: { retailer_id: req.query["tenantRetailerId"] } } }, function (err, result) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else if (!result) {
+                const msg = { "message": "Retailer: Error reading from server" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+            } else {
+                if (_.size(result.tenants) > 1) {
+                    _.remove(result.tenants, x => x.retailer_id === req.query["tenantRetailerId"])
+                } else {
+                    result.tenants = []
+                }
+
+                let retailerUpdate = { $set: { tenants: result.tenants } }
+                if (_.size(result.tenants) <= 0) {
+                    retailerUpdate = { $set: { tenants: [], isTenantRemsServer: false } }
+                }
+                retailers.findOneAndUpdate({ "retailer_id": result.retailer_id }, retailerUpdate, function (error, updateResult) {
+                    if (error) {
+                        console.log("Update error : ", error)
+                        const msg = { "message": "Error updating retailer" }
+                        response.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                        throw (error)
+                    }
+
+                    if (updateResult) {
+                        InsertAuditEntry('update', updateResult.value, retailerUpdate, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'retailers' })
+                        res.status(statusCode.ACCEPTED).json(updateResult.value)
+                    }
+                })
+            }
+        })
+    })
 
     app.post('/retailers/getSidebarConfiguration', bodyParser.json(), (req, res) => {
         console.log('retailers/getSidebarConfiguration called with: ', req.body)
@@ -180,5 +351,30 @@ module.exports = function (app) {
                 })
             }
         })
+    });
+
+    app.get('/retailers/getAllDetails', (req, res) => {
+        var retailersDetails = azureClient.db("pas_software_distribution").collection("retailers");
+        retailersDetails.find().toArray(function (err, result) {
+            var retailers = []
+            result.forEach(retailerObject => {
+                if (retailerObject.isTenantRemsServer !== true && retailerObject.isTenant !== true) {
+                    retailers.push(retailerObject)
+                } else {
+                    if (retailerObject.isTenantRemsServer === true) {
+                        retailerObject.tenants.forEach(tenant => {
+                            retailers.push(_.find(result, x => x.retailer_id === tenant.retailer_id))
+                        });
+                    }
+                }
+            });
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else {
+                res.send(retailers)
+            }
+        });
     });
 }
