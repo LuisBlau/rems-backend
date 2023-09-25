@@ -28,6 +28,7 @@
     "lodash.clonedeep": "^4.5.0",
     "loglevel": "^1.8.0",
     "loglevel-format": "^1.1.2",
+    "moment": "^2.29.4",
     "mongodb": "^4.6.0",
     "mongoose": "^7.0.5",
     "mssql": "^9.0.1",
