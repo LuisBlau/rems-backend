@@ -30,7 +30,7 @@ module.exports = function (app) {
     app.delete('/bus-monitor/cleanUpOldContainers', (req, res) => {
         console.log("Delete /bus-monitor/cleanUpOldContainers called")
         const containers = azureClient.db("pas_software_distribution").collection("bus-monitor");
-        let weekAgo = moment().subtract(1, 'weeks').unix()
+        let weekAgo = new Date(moment().subtract(1, 'weeks'))
         let errorOccured = false
         containers.deleteMany({ LastUpdatedSec: { $exists: false } }, function (err, result) {
             if (err) {
