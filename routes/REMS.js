@@ -615,44 +615,54 @@ module.exports = function (app, connection, log) {
     });
 
     app.get("/REMS/versionsData", async (req, res) => {
+        console.log('/REMS/versionsData called with: ', req.query)
         try {
             let data = {
                 rem: {},
-                agents: []
+                agents: [],
             };
             let query = {};
             if (req.query.retailer_id) {
                 query["retailer_id"] = req.query.retailer_id;
             }
-            let rem = await azureClient.db("pas_software_distribution")
+            let rem = await azureClient
+                .db("pas_software_distribution")
                 .collection("rems")
-                .findOne(query);
+                .find(query)
+                .toArray();
             if (req.query.tenant_id) {
                 query["tenant_id"] = req.query.tenant_id;
             }
             data.rem = rem;
-            let agents = await azureClient.db("pas_software_distribution")
+            let agents = await azureClient
+                .db("pas_software_distribution")
                 .collection("agents")
                 .find(query)
                 .toArray();
             for (let i = 0; i < agents.length; i++) {
-                agents[i]['rma'] = '';
-                agents[i]['pas'] = '';
+                agents[i]["rma"] = "";
+                agents[i]["pas"] = "";
                 if (agents[i].versions && agents[i].versions.length > 0) {
                     for (let version of agents[i].versions) {
-                        if (RegExp('Remote Management Agent').test(version.Name)) {
-                            agents[i]['rma'] = version.Version;
-                        } else if (RegExp('Toshiba UnifiedPOS for Windows').test(version.Name)) {
-                            agents[i]['JavaPOS'] = version.Version;
-                        } else if (RegExp('Store Integrator').test(version.Name)) {
-                            agents[i]['SIGUI'] = version.Version;
-                        } else if (RegExp('Toshiba Checkout Environment for Consumer-Service Lane').test(version.Name)) {
-                            agents[i]['CHEC'] = version.Version;
+                        if (RegExp("Remote Management Agent").test(version.Name)) {
+                            agents[i]["rma"] = version.Version;
+                        } else if (
+                            RegExp("Toshiba UnifiedPOS for Windows").test(version.Name)
+                        ) {
+                            agents[i]["JavaPOS"] = version.Version;
+                        } else if (RegExp("Store Integrator").test(version.Name)) {
+                            agents[i]["SIGUI"] = version.Version;
+                        } else if (
+                            RegExp(
+                                "Toshiba Checkout Environment for Consumer-Service Lane"
+                            ).test(version.Name)
+                        ) {
+                            agents[i]["CHEC"] = version.Version;
                         }
                     }
                 }
                 if (agents[i].status && agents[i].status.RMA) {
-                    agents[i]['pas'] = agents[i].status.RMA.Version;
+                    agents[i]["pas"] = agents[i].status.RMA.Version;
                 }
             }
             data.agents = agents;
@@ -660,7 +670,7 @@ module.exports = function (app, connection, log) {
             res.status(200).json(data);
         } catch (e) {
             console.log(e);
-            res.status(500).json({ 'error': e });
+            res.status(500).json({ error: e });
         }
     });
 
@@ -848,45 +858,44 @@ module.exports = function (app, connection, log) {
                         }
                     })
 
+                    lookupAgents(missingAgent, retailer_id)
+                        .then((agents) => {
+                            var noAgent = "";
+                            if (agents) {
+                                agents.map((agent) => {
+                                    if (agent.agentName) {
+                                        newRecords[agent.index].agentName = agent.agentName;
+                                    } else {
+                                        noAgent = noAgent + agent.storeName + " ";
+                                    }
+                                });
+                            }
 
-                    lookupAgents(missingAgent, retailer_id).then(agents => {
-                        var noAgent = "";
-                        if (agents) {
-                            agents.map(agent => {
-                                if (agent.agentName) {
-                                    newRecords[agent.index].agentName = agent.agentName;
-                                }
-                                else {
-                                    noAgent = noAgent + agent.storeName + " "
-                                }
-                            })
-                        }
-
-                        if (noAgent.length > 0) {
-                            /* I wanted to send an error here, but we cannot add a message to an error response
-                            So we have to check if the message == Success on the client side*/
-                            const msg = "Agent(s) not found for store(s) [ " + noAgent + "]"
-                            res.status(statusCode.OK).json(msg)
+                            if (noAgent.length > 0) {
+                                /* I wanted to send an error here, but we cannot add a message to an error response
+                                So we have to check if the message == Success on the client side*/
+                                const msg = "Agent(s) not found for store(s) [ " + noAgent + "]"
+                                res.status(statusCode.OK).json(msg)
+                                return;
+                            }
+                            else {
+                                deployments.insertMany(newRecords, function (err, insertResults) {
+                                    if (err) {
+                                        const msg = { "error": err }
+                                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                                        return
+                                    }
+                                    InsertAuditEntry('insert', null, newRecords, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deployments' })
+                                });
+                                const msg = { "message": "Success" }
+                                res.status(statusCode.OK).json(msg);
+                                return;
+                            }
+                        }).catch(error => {
+                            const msg = { "error": error }
+                            res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                             return;
-                        }
-                        else {
-                            deployments.insertMany(newRecords, function (err, insertResults) {
-                                if (err) {
-                                    const msg = { "error": err }
-                                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                                    return
-                                }
-                                InsertAuditEntry('insert', null, newRecords, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deployments' })
-                            });
-                            const msg = { "message": "Success" }
-                            res.status(statusCode.OK).json(msg);
-                            return;
-                        }
-                    }).catch(error => {
-                        const msg = { "error": error }
-                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                        return;
-                    });
+                        });
                 }); // deployment read from DB for max index
             }// if config lookup was good.
         }) // config lookup from database
@@ -1483,4 +1492,58 @@ module.exports = function (app, connection, log) {
             res.send(results)
         });
     });
-}
+
+    app.get('/REMS/getAllRetailerDetails', (req, res) => {
+        var retailersDetails = azureClient.db("pas_software_distribution").collection("retailers");
+        retailersDetails.find().toArray(function (err, result) {
+            var retailers = []
+            result.forEach(retailerObject => {
+                if (retailerObject.isTenantRemsServer !== true && retailerObject.isTenant !== true) {
+                    retailers.push(retailerObject)
+                } else {
+                    if (retailerObject.isTenantRemsServer === true) {
+                        retailerObject.tenants.forEach(tenant => {
+                            retailers.push(_.find(result, x => x.retailer_id === tenant.retailer_id))
+                        });
+                    }
+                }
+            });
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err
+            } else {
+                res.send(retailers)
+            }
+        });
+    });
+
+    app.delete("/REMS/deleteRemsDoc", (req, res) => {
+        const idStr = req.query._id; // Assuming the query parameter is named "_id"
+        if (!idStr) {
+            res
+                .status(400)
+                .json({ error: "The '_id' query parameter must be provided" });
+            return;
+        }
+        const idObj = new ObjectId(idStr); // Convert to ObjectId
+        var remsColl = azureClient
+            .db("pas_software_distribution")
+            .collection("rems");
+
+        remsColl.findOneAndDelete({ _id: idObj }, function (err, result) {
+            if (err) {
+                console.error("An error occurred:", err);
+                res
+                    .status(500)
+                    .json({ error: "An error occurred while deleting the document" });
+                return;
+            }
+            if (result && result.value) {
+                res.status(200).json({ message: "Document deleted successfully" });
+            } else {
+                res.status(404).json({ message: "Document not found" });
+            }
+        });
+    });
+};

@@ -197,11 +197,12 @@ module.exports = function (app, connection, log) {
   })
 
   app.post("/registers/requestRemsDump/", bodyParser.json(), (req, res) => {
-    console.log('registers/requestRemsDump with: ', req.body)
+    console.log('registers/requestRemsDump with: ', req)
     msgSent = {
       "body": {
         "retailer": req.body['retailer'],
-        "dataCapture": "REMS"
+        "dataCapture": "REMS",
+        "remsId": req.query["remsId"]
       }
     };
     const sender = sbClient.createSender(req.body["retailer"].toLowerCase());
