@@ -174,11 +174,15 @@ module.exports = function (app) {
         }
 
         var stores = azureClient.db("pas_software_distribution").collection("stores");
+        var agents = azureClient.db("pas_software_distribution").collection("agents");
 
         try {
             const result = await stores.findOneAndDelete({ storeName: store, retailer_id: retailer });
-            if (result.value !== null) {
+            const agentsDeleteResult = await agents.deleteMany({ storeName: store, retailer_id: retailer })
+
+            if (result.value !== null && agentsDeleteResult.value !== null) {
                 InsertAuditEntry('delete', result.value, 'delete', req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'stores' })
+                InsertAuditEntry('delete', agentsDeleteResult.value, 'delete', req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'agents' })
                 res.status(200).send({ message: "Store successfully deleted from the database." });
             } else {
                 res.status(404).send({ error: "Store not found in the database." });

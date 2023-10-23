@@ -195,7 +195,7 @@ module.exports = function (app) {
 
                 let retailerUpdate = { $set: { tenants: result.tenants } }
                 if (_.size(result.tenants) <= 0) {
-                    retailerUpdate = { $set: { tenants: [], isTenantRemsServer: false } }
+                    retailerUpdate = { $set: { tenants: [], isTenantRemsServer: false, configuration: {} } }
                 }
                 retailers.findOneAndUpdate({ "retailer_id": result.retailer_id }, retailerUpdate, function (error, updateResult) {
                     if (error) {
