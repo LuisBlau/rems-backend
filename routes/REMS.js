@@ -14,8 +14,10 @@ const extract = require('extract-zip')
 var jwt = require('jsonwebtoken');
 const { v1: uuidv1 } = require('uuid');
 const { InsertAuditEntry } = require('../middleware/auditLogger');
+const { ServiceBusClient } = require("@azure/service-bus");
 
 require('dotenv').config()
+const sbClient = new ServiceBusClient("Endpoint=sb://remscomm.servicebus.windows.net/;SharedAccessKeyName=dashboard-express;SharedAccessKey=v8rJ+T/HqTWa3OoWBvGlnWEBjyMBD0+7V+ASbL/Wluw=");
 
 // setup dirs
 var uploadDir = process.cwd() + "/uploads";
@@ -358,11 +360,28 @@ module.exports = function (app, connection, log) {
         const uuid = uuidv1();
         const timenow = new Date().getTime();
         const expiry = new Date().getTime() + (5 * 60 * 1000);
+        let client_id = ''
+        let secret_id = ''
+        let secret_value = ''
+
+        if (req.query["env"] === 'prod') {
+            client_id = process.env.CONNECTED_APP_CLIENT_ID_PROD
+            secret_id = process.env.CONNECTED_APP_SECRET_ID_PROD
+            secret_value = process.env.CONNECTED_APP_SECRET_VALUE_PROD
+        } else if (req.query["env"] === 'staging') {
+            client_id = process.env.CONNECTED_APP_CLIENT_ID_STAGING
+            secret_id = process.env.CONNECTED_APP_SECRET_ID_STAGING
+            secret_value = process.env.CONNECTED_APP_SECRET_VALUE_STAGING
+        } else {
+            // send error
+            // res.send()
+        }
         if (username === '') {
             username = 'tgcs_pas_con_apps@toshibagcs.com'
         }
+
         var token = jwt.sign({
-            iss: process.env.CONNECTED_APP_CLIENT_ID,
+            iss: client_id,
             sub: username,
             aud: "tableau",
             exp: expiry / 1000,
@@ -370,12 +389,12 @@ module.exports = function (app, connection, log) {
             jti: uuid,
             scp: ["tableau:views:embed", "tableau:metrics:embed"]
         },
-            process.env.CONNECTED_APP_SECRET_VALUE,
+            secret_value,
             {
                 algorithm: 'HS256',
                 header: {
-                    'kid': process.env.CONNECTED_APP_SECRET_ID,
-                    'iss': process.env.CONNECTED_APP_CLIENT_ID
+                    'kid': secret_id,
+                    'iss': client_id
                 }
             }
         );
@@ -874,7 +893,34 @@ module.exports = function (app, connection, log) {
                             const msg = { "error": error }
                             res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                             return;
-                        });
+                        }
+                        else {
+                            newRecords.forEach(record => {
+                                msgSent = {
+                                    "body": record
+                                }
+                                const sender = sbClient.createSender(req.query["retailerId"].toLowerCase());
+                                InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: req.query["retailerId"].toLowerCase() })
+                                sender.sendMessages(msgSent)
+                            });
+
+                            deployments.insertMany(newRecords, function (err, insertResults) {
+                                if (err) {
+                                    const msg = { "error": err }
+                                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                                    return
+                                }
+                                InsertAuditEntry('insert', null, newRecords, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deployments' })
+                            });
+                            const msg = { "message": "Success" }
+                            res.status(statusCode.OK).json(msg);
+                            return;
+                        }
+                    }).catch(error => {
+                        const msg = { "error": error }
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        return;
+                    });
                 }); // deployment read from DB for max index
             }// if config lookup was good.
         }) // config lookup from database
