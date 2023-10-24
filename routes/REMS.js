@@ -893,34 +893,7 @@ module.exports = function (app, connection, log) {
                             const msg = { "error": error }
                             res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                             return;
-                        }
-                        else {
-                            newRecords.forEach(record => {
-                                msgSent = {
-                                    "body": record
-                                }
-                                const sender = sbClient.createSender(req.query["retailerId"].toLowerCase());
-                                InsertAuditEntry('sendMessage', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: req.query["retailerId"].toLowerCase() })
-                                sender.sendMessages(msgSent)
-                            });
-
-                            deployments.insertMany(newRecords, function (err, insertResults) {
-                                if (err) {
-                                    const msg = { "error": err }
-                                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                                    return
-                                }
-                                InsertAuditEntry('insert', null, newRecords, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deployments' })
-                            });
-                            const msg = { "message": "Success" }
-                            res.status(statusCode.OK).json(msg);
-                            return;
-                        }
-                    }).catch(error => {
-                        const msg = { "error": error }
-                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                        return;
-                    });
+                        });
                 }); // deployment read from DB for max index
             }// if config lookup was good.
         }) // config lookup from database
