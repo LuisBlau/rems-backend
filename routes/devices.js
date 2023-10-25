@@ -26,7 +26,7 @@ module.exports = function (app) {
     });
 
     app.get('/devices/getPeripherals', (req, res) => {
-        let query = { retailer_id: req.query.retailerId, ip: { $exists: false } }
+        let query = { retailer_id: req.query.retailerId, ip: null }
         if (req.query["tenantId"] !== undefined) {
             query.tenant_id = req.query["tenantId"]
         }
