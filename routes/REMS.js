@@ -595,17 +595,27 @@ module.exports = function (app, connection, log) {
             } else {
                 let agentsToSend = []
                 results.forEach(agent => {
+
                     if (agent.status) {
                         if (!_.includes(Object.keys(agent.status), "Controller")) {
-                            let agentTypes = ['SI Terminal', 'CHEC', 'Controller']
                             agent.id = agent._id
-                            agent.type = agentTypes[Math.floor(Math.random() * agentTypes.length)];
+                            if (agent.isSco === true) {
+                                agent.type = 'SCO'
+                            } else {
+                                agent.type = 'Register'
+                            }
                             agentsToSend.push(agent)
                         }
                     } else {
+                        if (agent.isSco === true) {
+                            agent.type = 'SCO'
+                        } else[
+                            agent.type = 'Register'
+                        ]
                         agentsToSend.push(agent)
                     }
                 });
+                console.log(agentsToSend)
                 res.status(200).json(agentsToSend)
             }
         })
