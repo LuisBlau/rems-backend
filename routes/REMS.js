@@ -1142,7 +1142,7 @@ module.exports = function (app, connection, log) {
                         existingConfigurations = {}
                     }
                     let existingConfigNames
-                    if (existingConfigurations.length > 0) {
+                    if (!_.isEmpty(existingConfigurations)) {
                         existingConfigNames = Object.keys(existingConfigurations)
                     } else {
                         existingConfigNames = []
