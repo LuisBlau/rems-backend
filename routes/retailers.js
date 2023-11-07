@@ -13,6 +13,7 @@ module.exports = function (app) {
         console.log('/retailer/insertTenant with: ', req.body)
         let updateWasGood = true
         var retailers = azureClient.db("pas_software_distribution").collection("retailers");
+        var users = azureClient.db("pas_config").collection("user")
         retailers.findOne({ retailer_id: req.body["retailer_id"] }).then((result) => {
             if (result !== null) {
                 const msg = { "error": 'Tenant/Retailer already exists!' }
@@ -42,6 +43,28 @@ module.exports = function (app) {
                 retailers.find({ retailer_id: req.body.parentRemsServerId }).toArray((err, result) => {
                     if (result[0]?.tenants?.length > 0) {
                         parentTenants = result[0]?.tenants
+                    } else {
+                        // REMS server was previously not tenantized
+                        // We need to assign all users who previously had this
+                        // Retailer ID to the new (and first) tenant
+                        retailers.find({ retailer_id: req.body.parentRemsServerId }).toArray((err, result) => {
+                            users.find({ retailer: result[0].description }).forEach(function (userResult) {
+                                userResult.retailer = _.remove(userResult.retailer, function (x) {
+                                    return x !== result[0].description
+                                })
+                                userResult.retailer.push(req.body["description"])
+                                users.findOneAndUpdate({ _id: userResult._id }, { "$set": userResult }, { upsert: true }, function (err, result) {
+                                    if (result.value !== null) {
+                                        InsertAuditEntry('update', result.value, userResult, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_config', collection: 'user' })
+                                    }
+                                    if (err) {
+                                        const msg = { "error": err }
+                                        throw err;
+                                    }
+                                })
+                            })
+                        })
+
                     }
                     parentTenants.push({
                         retailer_id: req.body.retailer_id,
@@ -141,6 +164,7 @@ module.exports = function (app) {
         console.log("/retailers/deleteTenant received with: ", req.query)
         const retailers = azureClient.db("pas_software_distribution").collection("retailers")
         const stores = azureClient.db('pas_software_distribution').collection("stores")
+        const users = azureClient.db('pas_config').collection('user')
 
         // First, handle removing tenant from all stores
         stores.find({ tenant_id: req.query["tenantRetailerId"] }).forEach(function (result) {
@@ -163,20 +187,6 @@ module.exports = function (app) {
             }
         })
 
-        // Then handle deleting the retailer entry for the tenant
-        retailers.findOneAndDelete({ retailer_id: req.query["tenantRetailerId"] }, function (err, result) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else if (!result) {
-                const msg = { "message": "Tenant: Error reading from server" }
-                res.status(statusCode.NO_CONTENT).json(msg);
-            } else {
-                InsertAuditEntry('delete', result.value, 'delete', req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'retailers' })
-            }
-        })
-
         // Finally, remove the tenant from the Parent REMS server entry
         retailers.findOne({ "tenants": { $elemMatch: { retailer_id: req.query["tenantRetailerId"] } } }, function (err, result) {
             if (err) {
@@ -190,7 +200,39 @@ module.exports = function (app) {
                 if (_.size(result.tenants) > 1) {
                     _.remove(result.tenants, x => x.retailer_id === req.query["tenantRetailerId"])
                 } else {
+                    // we gotta help all those poor, de-tenantized users out now
+                    retailers.findOne({ retailer_id: req.query["tenantRetailerId"] }, function (err, tenantResult) {
+                        users.find({ retailer: tenantResult.description }).forEach(function (userResult) {
+                            userResult.retailer = _.remove(userResult.retailer, function (x) {
+                                return x !== tenantResult.description
+                            })
+                            userResult.retailer.push(result.description)
+                            users.findOneAndUpdate({ _id: userResult._id }, { "$set": userResult }, { upsert: true }, function (err, result) {
+                                if (result.value !== null) {
+                                    InsertAuditEntry('update', result.value, userResult, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_config', collection: 'user' })
+                                }
+                                if (err) {
+                                    const msg = { "error": err }
+                                    throw err;
+                                }
+                            })
+                        })
+                    })
+                    // this was the last tenant on the REMS server
                     result.tenants = []
+                    // Then handle deleting the retailer entry for the tenant
+                    retailers.findOneAndDelete({ retailer_id: req.query["tenantRetailerId"] }, function (err, result) {
+                        if (err) {
+                            const msg = { "error": err }
+                            res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                            throw err
+                        } else if (!result) {
+                            const msg = { "message": "Tenant: Error reading from server" }
+                            res.status(statusCode.NO_CONTENT).json(msg);
+                        } else {
+                            InsertAuditEntry('delete', result.value, 'delete', req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'retailers' })
+                        }
+                    })
                 }
 
                 let retailerUpdate = { $set: { tenants: result.tenants } }
