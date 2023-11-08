@@ -24,7 +24,7 @@ module.exports = function (app) {
                 var newTenantToInsert = {
                     retailer_id: req.body.retailer_id,
                     description: req.body?.description,
-                    configuration: [],
+                    configuration: {},
                     isTenant: true
                 }
 
@@ -172,7 +172,7 @@ module.exports = function (app) {
                 const msg = { "message": "Tenant: Error reading from server" }
                 res.status(statusCode.NO_CONTENT).json(msg);
             } else {
-                stores.findOneAndUpdate({ retailer_id: result.retailer_id, tenant_id: result.tenant_id, storeName: result.storeName }, { $set: { tenant_id: '' } }, function (err, updateResult) {
+                stores.findOneAndUpdate({ retailer_id: result.retailer_id, tenant_id: result.tenant_id, storeName: result.storeName }, { $unset: { tenant_id: '' } }, function (err, updateResult) {
                     if (err) {
                         const msg = { "error": err }
                         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
@@ -181,7 +181,7 @@ module.exports = function (app) {
                         const msg = { "message": "Store: Error reading from server" }
                         res.status(statusCode.NO_CONTENT).json(msg);
                     } else {
-                        InsertAuditEntry('update', updateResult.value, { $set: { tenant_id: '' } }, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'stores' })
+                        InsertAuditEntry('update', updateResult.value, { $unset: { tenant_id: '' } }, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'stores' })
                     }
                 })
             }
