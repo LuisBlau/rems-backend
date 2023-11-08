@@ -136,7 +136,7 @@ module.exports = function (app) {
                     {
                         id: connId,
                         params: {
-                            body: '{{.}}'
+                            body: '{"alertName": "{{rule.name}}","reason":"{{context.reason}}","group":"{{context.group}}"}'
                         },
                         group: 'metrics.threshold.fired'
                     }

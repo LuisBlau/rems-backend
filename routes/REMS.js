@@ -909,43 +909,6 @@ module.exports = function (app, connection, log) {
         }) // config lookup from database
     });
 
-    app.get('/REMS/stores/alerts', (req, res) => {
-        console.log("Get /REMS/stores/alerts received : ", req.query)
-        const alerts = azureClient.db("pas_availability").collection("alerts");
-        if (req.query["tenantId"] === undefined) {
-            alerts.find({ retailer_id: req.query.retailerId, storeName: req.query.storeName }).toArray(function (err, pasAvailability) {
-                if (err) {
-                    const msg = { "error": err }
-                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                    throw err
-                } else if (!pasAvailability) {
-                    const msg = { "message": "Rems: Error reading from server" }
-                    res.status(statusCode.NO_CONTENT).json(msg);
-                }
-                else {
-                    // console.log("sending alerts info : ", pasAvailability)
-                    res.status(statusCode.OK).json(pasAvailability);
-                }
-            });
-        } else {
-            alerts.find({ retailer_id: req.query.retailerId, storeName: req.query.storeName, tenant_id: req.query.tenantId }).toArray(function (err, pasAvailability) {
-                if (err) {
-                    const msg = { "error": err }
-                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                    throw err
-                } else if (!pasAvailability) {
-                    const msg = { "message": "Rems: Error reading from server" }
-                    res.status(statusCode.NO_CONTENT).json(msg);
-                }
-                else {
-                    // console.log("sending alerts info : ", pasAvailability)
-                    res.status(statusCode.OK).json(pasAvailability);
-                }
-            });
-        }
-
-    });
-
     app.get('/REMS/rems', (req, res) => {
         console.log("Get /REMS/rems received : ", req.query)
 
