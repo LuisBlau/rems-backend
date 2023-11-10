@@ -81,7 +81,7 @@ module.exports = function (app) {
     // Route to create or update a metric threshold rule
     app.post('/esalert/rules/upsert', bodyParser.json(), async (req, res) => {
         try {
-            const { id = '', name, connectorName, interval, aggType, timeUnit, comparator, timeSize, threshold, tags, filterQuery, groupByFields, esBaseURI, esToken } = req.body;
+            const { id = '', name, connectorName, interval, aggType, timeUnit, comparator, timeSize, threshold, tags, filterQueryBodyText, filterQueryBodyJson, groupByFields, esBaseURI, esToken } = req.body;
             const isNewRule = !id || id === '';
 
             // Create a new JSON object for the rule
@@ -115,7 +115,8 @@ module.exports = function (app) {
                 alertOnNoData: true,
                 alertOnGroupDisappear: true,
                 groupBy: groupByFields,
-                filterQueryText: filterQuery
+                filterQueryText: filterQueryBodyText,
+                filterQuery: filterQueryBodyJson
             };
             ruleBody.params = params;
 
