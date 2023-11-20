@@ -81,7 +81,7 @@ module.exports = function (app) {
     // Route to create or update a metric threshold rule
     app.post('/esalert/rules/upsert', bodyParser.json(), async (req, res) => {
         try {
-            const { id = '', name, connectorName, interval, aggType, timeUnit, comparator, timeSize, threshold, tags, filterQueryBodyText, filterQueryBodyJson, groupByFields, esBaseURI, esToken } = req.body;
+            const { id = '', name, connectorName, interval, aggType, timeUnit, comparator, timeSize, threshold, tags, filterQueryBodyText, filterQueryBodyJson, groupByFields, esBaseURI, esToken, email = '' } = req.body;
             const isNewRule = !id || id === '';
 
             // Create a new JSON object for the rule
@@ -124,27 +124,43 @@ module.exports = function (app) {
             const connRes = await fetchFromKibana(uri, 'GET', esToken);
             const connectors = connRes.data;
 
-            var connId;
+            var webHookConnId;
+            var emailId;
             for (i = 0; i < connectors.length; i++) {
+                if(email !== '' && connectors[i].name === 'Elastic-Cloud-SMTP'){
+                    emailId = connectors[i].id;
+                }
+
                 if (connectors[i].name === connectorName) {
-                    connId = connectors[i].id;
-                    break;
+                    webHookConnId = connectors[i].id;
                 }
             }
 
-            if (connId && connId !== '') {
-                const actions = [
-                    {
-                        id: connId,
-                        params: {
-                            body: '{"alertName": "{{rule.name}}","reason":"{{context.reason}}","group":"{{context.group}}"}'
-                        },
-                        group: 'metrics.threshold.fired'
-                    }
-                ];
-                ruleBody.actions = actions;
+            const actions = [];
+            if (webHookConnId && webHookConnId !== '') {
+
+                actions.push( {
+                    id: webHookConnId,
+                    params: {
+                        body: '{"alertName": "{{rule.name}}","reason":"{{context.reason}}","group":"{{context.group}}"}'
+                    },
+                    group: 'metrics.threshold.fired'
+                })
             }
 
+            if(email !== '' && emailId){
+                actions.push({
+                    id: emailId,
+                    params: {
+                        subject: `${name} Alert Notification`,
+                        message: `{{context.reason}}, Thrown by Alert: {{rule.name}}, Affected: {{context.group}}, [View alert details]({{context.alertDetailsUrl}})`,
+                        to: [email]
+                    },
+                    group: 'metrics.threshold.fired'
+                });
+            }
+
+            ruleBody.actions = actions;
             if (tags) {
                 ruleBody.tags = tags;
             }
