@@ -1124,7 +1124,7 @@ module.exports = function (app, connection, log) {
                             const receivedIndex = _.findIndex(receivedConfigItems, (x) => x.configName === existingConfigItemName)
                             if (receivedIndex >= 0) {
                                 if (receivedConfigItems[receivedIndex].configValueType === 'boolean') {
-                                    receivedConfigItems[receivedIndex].configValue = String(receivedConfigItems[receivedIndex].configValue)
+                                    receivedConfigItems[receivedIndex].configValue = Boolean(receivedConfigItems[receivedIndex].configValue)
                                 }
                                 _.set(updatedConfiguration, existingConfigItemName, receivedConfigItems[receivedIndex].configValue)
                             }
@@ -1214,7 +1214,7 @@ module.exports = function (app, connection, log) {
                 if (configItem.configValueType !== 'boolean') {
                     configUpdate = { $set: { configDefaultValue: configItem.configValue } }
                 } else {
-                    configUpdate = { $set: { configDefaultValue: String(configItem.configValue) } }
+                    configUpdate = { $set: { configDefaultValue: Boolean(configItem.configValue) } }
                 }
 
                 const configToUpdate = azureClient.db("pas_config").collection("configurations");
