@@ -14,7 +14,8 @@ const rsmpProdSqlConfig = {
         trustServerCertificate: false,
         hostNameInCertificate: "*.database.windows.net",
         loginTimeout: 30
-    }
+    },
+    requestTimeout: 60000
 }
 
 const rsmpStagingSqlConfig = {
@@ -30,7 +31,8 @@ const rsmpStagingSqlConfig = {
         trustServerCertificate: false,
         hostNameInCertificate: "*.database.windows.net",
         loginTimeout: 30
-    }
+    },
+    requestTimeout: 60000
 }
 
 // create a new connection pool
