@@ -47,7 +47,10 @@ module.exports = function (app) {
     app.put('/alerts/:alertId', bodyParser.json(), (req, res) => {
         console.log('/alerts/:alertId received with: ', req.body)
         const alertId = req.params.alertId;
-        const newStatus = req.body.alertAcknowledged;
+
+        const alertKeep = req.body.alertKeep;
+        const eventCreated = req.body.eventCreated;
+
         const alerts = azureClient.db("pas_availability").collection("alerts");
 
         try {
@@ -55,23 +58,35 @@ module.exports = function (app) {
                 _id: ObjectId(alertId),
             };
 
-            const updateFields = {
-                alertAcknowledged: newStatus,
-            };
-
-            // If newStatus is true add the dateTimeFlagged field with the date provided
-            if (newStatus === true) {
-                const dateTimeFlagged = req.body.dateTimeFlagged;
-                if (dateTimeFlagged) {
-                    updateFields.dateTimeFlagged = dateTimeFlagged;
+            var updateOperation;
+            if(alertKeep != null){
+                const updateFields = {
+                    alertKeep: alertKeep,
+                };
+    
+                // If newStatus is true add the dateTimeFlagged field with the date provided
+                if (alertKeep === false) {
+                    const dateTimeFlagged = req.body.dateTimeFlagged;
+                    if (dateTimeFlagged) {
+                        updateFields.dateTimeFlagged = dateTimeFlagged;
+                    }
+                } else {
+                    updateFields.dateTimeFlagged = undefined;
                 }
-            } else {
-                updateFields.dateTimeFlagged = undefined;
+    
+                updateOperation = {
+                    $set: updateFields,
+                };
+            }else if (eventCreated != null && eventCreated){
+                const updateFields = {
+                    eventCreated: eventCreated,
+                    automaticSNOWEvent: false
+                };
+    
+                updateOperation = {
+                    $set: updateFields,
+                };
             }
-
-            const updateOperation = {
-                $set: updateFields,
-            };
 
             alerts.updateOne(updateQuery, updateOperation, (error, result) => {
                 if (error) {
@@ -79,7 +94,7 @@ module.exports = function (app) {
                     res.status(statusCode.INTERNAL_SERVER_ERROR).json({ error: 'Internal server error' });
                 } else if (result.matchedCount === 1) {
                     InsertAuditEntry('update', result.value, updateOperation, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_availability', collection: 'alerts' })
-                    res.status(statusCode.OK).json({ message: 'alertAcknowledged updated successfully' });
+                    res.status(statusCode.OK).json({ message: 'document updated successfully' });
                 } else {
                     res.status(statusCode.NO_CONTENT).json({ message: 'No matching document found' });
                 }

@@ -1,5 +1,11 @@
 const axios = require('axios');
-var bodyParser = require('body-parser');
+const bodyParser = require('body-parser');
+const mongodb = require("mongodb")
+const statusCode = require('http-status-codes').StatusCodes
+var { ObjectId } = require('mongodb')
+var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUvMn4Ny2xW4BwMjN1eHXYPpCniT8eU3nfnnGVtbV7RVUDotMz9E7Un226yrCyjXyukDDSSxLjNUUyaQ%3D%3D@pas-test-nosql-db.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&maxIdleTimeMS=120000&appName=@pas-test-nosql-db@");
+const { InsertAuditEntry } = require('../middleware/auditLogger');
+azureClient.connect();
 
 module.exports = function (app) {
     async function fetchFromKibana(uri, method, token, data = null) {
@@ -81,7 +87,7 @@ module.exports = function (app) {
     // Route to create or update a metric threshold rule
     app.post('/esalert/rules/upsert', bodyParser.json(), async (req, res) => {
         try {
-            const { id = '', name, connectorName, interval, aggType, timeUnit, comparator, timeSize, threshold, tags, filterQueryBodyText, filterQueryBodyJson, groupByFields, esBaseURI, esToken, email = '' } = req.body;
+            const { id = '', name, connectorName, interval, aggType, timeUnit, comparator, timeSize, threshold, tags, filterQueryBodyText, filterQueryBodyJson, groupByFields, esBaseURI, esToken, email = '', snow } = req.body;
             const isNewRule = !id || id === '';
 
             // Create a new JSON object for the rule
@@ -142,7 +148,7 @@ module.exports = function (app) {
                 actions.push( {
                     id: webHookConnId,
                     params: {
-                        body: '{"alertName": "{{rule.name}}","reason":"{{context.reason}}","group":"{{context.group}}"}'
+                        body: `{"alertName": "{{rule.name}}","reason":"{{context.reason}}","group":"{{context.group}}","automaticSnowEvent":${snow}}`
                     },
                     group: 'metrics.threshold.fired'
                 })
@@ -227,7 +233,6 @@ module.exports = function (app) {
         }
     });
 
-
     // Route to delete a metric threshold rule
     app.delete('/esalert/rules', async (req, res) => {
         try {
@@ -262,4 +267,100 @@ module.exports = function (app) {
             }
         }
     });
+
+    app.delete('/esalert/rules/rulesmetadata/:ruleId', async (req, res) => {
+        const ruleId = req.params.ruleId;
+        const alerts = azureClient.db("pas_availability").collection("alerts");
+    
+        try {
+            // Check if the document with the specified ruleId exists
+            const existingDocument = await alerts.findOne({ ruleId: ruleId });
+    
+            if (!existingDocument) {
+                res.status(statusCode.NOT_FOUND).json({ message: 'No matching document found' });
+                return;
+            }
+    
+            // Document found, proceed with deletion
+            const query = {
+                _id: ObjectId(existingDocument._id),
+            };
+    
+            const result = await alerts.deleteOne(query);
+    
+            if (result.deletedCount === 1) {
+                res.status(statusCode.OK).json({ message: 'Document deleted successfully' });
+            } else {
+                // Something went wrong with deletion
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json({ error: 'Error deleting document' });
+            }
+        } catch (error) {
+            console.error('MongoDB delete error:', error);
+            res.status(statusCode.INTERNAL_SERVER_ERROR).json({ error: 'Internal server error' });
+        }
+    });
+
+    app.post('/esalert/rules/rulesmetadata/batch', bodyParser.json(), async (req, res) => {
+        const ruleIds = req.body.ruleObjects;
+        if (!ruleIds || !Array.isArray(ruleIds) || ruleIds.length === 0) {
+            return res.status(statusCode.OK).json([]);
+        }
+        
+        const alerts = azureClient.db("pas_availability").collection("alerts");
+        try {
+            const query = {
+                ruleId: { $in: ruleIds },
+            };
+        
+            const results = await alerts.find(query).toArray();
+        
+            res.status(statusCode.OK).json(results);
+        } catch (error) {
+            console.error('MongoDB query error:', error);
+            res.status(statusCode.INTERNAL_SERVER_ERROR).json({ error: 'Internal server error', data: [] });
+        }
+    });
+    
+    app.put('/esalert/rules/rulesmetadata', bodyParser.json(), async (req, res) => {
+        const ruleId = req.body.ruleId;
+        const createSNOW = req.body.createSNOW;
+        const type = 'Rule';
+    
+        const alerts = azureClient.db("pas_availability").collection("alerts");
+    
+        try {
+            const existingDocument = await alerts.findOne({ ruleId: ruleId });
+    
+            const updateQuery = existingDocument ? { _id: existingDocument._id } : { _id: ObjectId() };
+    
+            const updateFields = {
+                createSNOW: createSNOW,
+                type: type,
+                retailer_id: '',
+                ruleId: ruleId,
+            };
+    
+            const updateOperation = {
+                $set: updateFields,
+            };
+    
+            const options = {
+                upsert: true,
+            };
+    
+            const result = await alerts.updateOne(updateQuery, updateOperation, options);
+    
+            if (result.matchedCount === 1 || result.upsertedCount === 1) {
+                const updatedDocument = result.upsertedCount === 1 ? { _id: result.upsertedId._id, ...updateFields } : result.value;
+                InsertAuditEntry('update', updatedDocument, updateOperation, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_availability', collection: 'alerts' });
+                res.status(statusCode.OK).json({ message: 'document updated successfully' });
+            } else {
+                res.status(statusCode.NO_CONTENT).json({ message: 'Failed to insert or update document' });
+            }
+        } catch (exception) {
+            console.error('Exception:', exception);
+            res.status(statusCode.INTERNAL_SERVER_ERROR).json({ error: 'Internal server error' });
+        }
+    });
+        
 }

@@ -595,24 +595,25 @@ module.exports = function (app, connection, log) {
             } else {
                 let agentsToSend = []
                 results.forEach(agent => {
-
-                    if (agent.status) {
-                        if (!_.includes(Object.keys(agent.status), "Controller")) {
-                            agent.id = agent._id
+                    if (agent.os !== 'Android') {
+                        if (agent.status) {
+                            if (!_.includes(Object.keys(agent.status), "Controller")) {
+                                agent.id = agent._id
+                                if (agent.isSco === true) {
+                                    agent.type = 'SCO'
+                                } else {
+                                    agent.type = 'Register'
+                                }
+                                agentsToSend.push(agent)
+                            }
+                        } else {
                             if (agent.isSco === true) {
                                 agent.type = 'SCO'
-                            } else {
+                            } else[
                                 agent.type = 'Register'
-                            }
+                            ]
                             agentsToSend.push(agent)
                         }
-                    } else {
-                        if (agent.isSco === true) {
-                            agent.type = 'SCO'
-                        } else[
-                            agent.type = 'Register'
-                        ]
-                        agentsToSend.push(agent)
                     }
                 });
                 console.log(agentsToSend)
@@ -768,9 +769,10 @@ module.exports = function (app, connection, log) {
     app.post('/deploy-schedule', bodyParser.json(), (req, res) => {
         console.log("POST deploy-schedule received : ", req.body, req.query)
 
-        const dateTime = req.body["dateTime"];
+        const dateTime = req.body["dateTime"] || null
         const name = req.body.name
         const id = req.body.id
+        const deploy = req.body.deploy
         const selected_retailer_id = req.query["retailerId"]
         let storeList = req.body.storeList
         const retailer_id = req.body["retailerId"]
@@ -795,6 +797,9 @@ module.exports = function (app, connection, log) {
                 record.retailer_id = selected_retailer_id;
                 record.config_id = config.id
                 record.apply_time = dateTime;
+                if (req.body["deploy"] === 'immediate') {
+                    record.deploy = deploy;
+                }
                 record.storeName = "";
                 record.agentName = "";
                 record.status = "Initial";
@@ -895,6 +900,29 @@ module.exports = function (app, connection, log) {
                                     }
                                     InsertAuditEntry('insert', null, newRecords, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deployments' })
                                 });
+
+                                //After insert send to bus service if it is immediate
+                                if (req.body["deploy"] === 'immediate') {
+                                    newRecords.map(rec => {
+                                        const msgToSend = {
+                                            "body": {
+                                                "apply_time": req.body["dateTime"] || null,
+                                                "deploy": req.body["deploy"],
+                                                "config_id": config.id,
+                                                "id" : maxId,
+                                                "package": req.body["name"],
+                                                "retailer_id": req.body["retailerId"],
+                                                "storeName": rec.storeName,
+                                                "status" : "Initial",
+                                                "agentName": rec.agentName,
+                                                "steps": rec.steps
+                                            }
+                                        }
+                                        const sender = sbClient.createSender(req.query["retailerId"].toLowerCase());
+                                        InsertAuditEntry('sendMessage', null, msgToSend, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: req.query["retailerId"].toLowerCase() });
+                                        sender.sendMessages(msgToSend)
+                                    })
+                                }
                                 const msg = { "message": "Success" }
                                 res.status(statusCode.OK).json(msg);
                                 return;
@@ -907,6 +935,8 @@ module.exports = function (app, connection, log) {
                 }); // deployment read from DB for max index
             }// if config lookup was good.
         }) // config lookup from database
+
+
     });
 
     app.get('/REMS/rems', (req, res) => {
@@ -1001,6 +1031,24 @@ module.exports = function (app, connection, log) {
             });
         }
     });
+
+    app.get('/REMS/cameraDevicesForStore', (req, res) => {
+        var devices = azureClient.db("pas_software_distribution").collection("devices");
+        devices.find({ retailer_id: req.query.retailerId, storeName: req.query.storeName, deviceType: { $in: ["ProduceCamera", "LossPreventionCamera"] } }).toArray(function (err, deviceList) {
+            if (err) {
+                const msg = { "error": err };
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
+                throw err;
+            } else if (!deviceList || deviceList.length === 0) {
+                const msg = { "message": "Devices: No cameras found" };
+                res.status(statusCode.NO_CONTENT).json(msg);
+            }
+            else {
+                // console.log("sending deviceList : ", deviceList);
+                res.status(statusCode.OK).json(deviceList);
+            }
+        })
+    })
 
     app.get('/REMS/agentsForStore', (req, res) => {
         console.log("Get /REMS/agentsForStore received : ", req.query);

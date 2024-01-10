@@ -84,53 +84,83 @@ module.exports = function (app, connection, log) {
 
   })
 
-  app.get('/registers/extracts', (req, res) => {
+  app.get('/registers/extracts', async (req, res) => {
     console.log("get /registers/extracts with: ", req.query)
-    if (req.query["tenantId"] === null) {
-      var results = []
-      var snapshots = azureClient.db("pas_reloads").collection("extracts");
-      let query = { "Retailer": req.query["retailerId"] }
-      if ("Store" in req.query) query["Store"] = req.query["Store"]
-      snapshots.find(query).toArray(function (err, result) {
-        results = result;
-        let modifiedResults = []
-        for (var x of results) {
-          var y = x
-          y["InStore"] = x["location"]["Store"]
-          y["Download"] = x["location"]["URL"]
-          y["Version"] = x["values"]["Version"]
-          y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-          y["ExtractType"] = x["values"]["ExtractType"]
-          y["State"] = x["values"]["State"]
-          y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
-          modifiedResults.push(y)
-        }
-        res.send(modifiedResults)
-      });
-    } else {
-      var results = []
-      var snapshots = azureClient.db("pas_reloads").collection("extracts");
-      let query = { "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"] }
-      snapshots.find(query).toArray(function (err, result) {
-        results = result;
-        let modifiedResults = []
-        for (var x of results) {
-          var y = x
-          y["InStore"] = x["location"]["Store"]
-          y["Download"] = x["location"]["URL"]
-          y["Version"] = x["values"]["Version"]
-          y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-          y["ExtractType"] = x["values"]["ExtractType"]
-          y["State"] = x["values"]["State"]
-          y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
-          modifiedResults.push(y)
-        }
-        res.send(modifiedResults)
-      })
+    var results = []
+    var snapshots = azureClient.db("pas_reloads").collection("extracts");
+    let query = { "Retailer": req.query["retailerId"] }
+    if ("Store" in req.query) query["Store"] = req.query["Store"]
+
+    const page = req.query.page ? Number(req.query.page) : 1;
+    const limit = req.query.limit ? Number(req.query.limit) : 10;
+    const skipValue = (page) * limit;
+    let filters = {};
+
+    if (req.query?.Store) {
+      filters.Store = { $regex: req.query.Store }
     }
+    if (req.query?.RegNum) {
+      filters.RegNum = { $regex: req.query.RegNum }
+    }
+
+    snapshots.count({ ...query, ...filters }).then((totalItem) => {
+      if (req.query["tenantId"] === null) {
+        snapshots.find({ ...query, ...filters }).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
+          results = result;
+          let modifiedResults = []
+          for (var x of results) {
+            var y = x
+            y["InStore"] = x["location"]["Store"]
+            y["Download"] = x["location"]["URL"]
+            y["Version"] = x["values"]["Version"]
+            y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+            y["ExtractType"] = x["values"]["ExtractType"]
+            y["State"] = x["values"]["State"]
+            y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
+            modifiedResults.push(y)
+          }
+          res.send({
+            items: modifiedResults,
+            pagination: {
+              limit,
+              page,
+              totalItem,
+              totalPage: Math.ceil(totalItem / limit)
+            }
+          })
+        });
+      } else {
+        let query = { "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"] }
+        snapshots.find({ ...query, ...filters }).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
+          results = result;
+          let modifiedResults = []
+          for (var x of results) {
+            var y = x
+            y["InStore"] = x["location"]["Store"]
+            y["Download"] = x["location"]["URL"]
+            y["Version"] = x["values"]["Version"]
+            y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+            y["ExtractType"] = x["values"]["ExtractType"]
+            y["State"] = x["values"]["State"]
+            y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
+            // y.Timestamp = new Date(y.Timestamp).getTime()
+            modifiedResults.push(y)
+          }
+          res.send({
+            items: modifiedResults,
+            pagination: {
+              limit,
+              page,
+              totalItem,
+              totalPage: Math.ceil(totalItem / limit)
+            }
+          })
+        })
+      }
+    })
   });
 
-  app.get('/registers/extractsForStore', (req, res) => {
+  app.get('/registers/extractsForStore', async (req, res) => {
     var snapshots = azureClient.db("pas_reloads").collection("extracts");
     let query = {}
     if (req.query["tenantId"] === undefined) {
@@ -138,30 +168,44 @@ module.exports = function (app, connection, log) {
     } else {
       query = { Retailer: req.query.retailerId, Store: req.query.storeName, tenant_id: req.query.tenantId }
     }
-    snapshots.find(query).toArray(function (err, results) {
-      if (err) {
-        const msg = { "error": err }
-        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-        throw err
-      } else if (!results) {
-        const msg = { "message": "No dumps found for store" }
-        res.status(statusCode.NO_CONTENT).json(msg);
-      } else {
-        let modifiedResults = []
-        for (var x of results) {
-          var y = x
-          y["InStore"] = x["location"]["Store"]
-          y["Download"] = x["location"]["URL"]
-          y["Version"] = x["values"]["Version"]
-          y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-          y["ExtractType"] = x["values"]["ExtractType"]
-          y["State"] = x["values"]["State"]
-          y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
-          modifiedResults.push(y)
+    const page = req.query.page ? Number(req.query.page) : 1;
+    const limit = req.query.limit ? Number(req.query.limit) : 10;
+    const skipValue = (page) * limit;
+
+    snapshots.count(query).then((totalItem) => {
+      snapshots.find(query).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, results) {
+        if (err) {
+          const msg = { "error": err }
+          res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+          throw err
+        } else if (!results) {
+          const msg = { "message": "No dumps found for store" }
+          res.status(statusCode.NO_CONTENT).json(msg);
+        } else {
+          let modifiedResults = []
+          for (var x of results) {
+            var y = x
+            y["InStore"] = x["location"]["Store"]
+            y["Download"] = x["location"]["URL"]
+            y["Version"] = x["values"]["Version"]
+            y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+            y["ExtractType"] = x["values"]["ExtractType"]
+            y["State"] = x["values"]["State"]
+            y["Anprompt_Line1"] = x["values"]["Anprompt_Line1"]
+            modifiedResults.push(y)
+          }
+          res.send({
+            items: modifiedResults,
+            pagination: {
+              limit,
+              page,
+              totalItem,
+              totalPage: Math.ceil(totalItem / limit)
+            }
+          })
         }
-        res.send(modifiedResults)
-      }
-    });
+      });
+    })
   });
 
   app.get('/registers/extracts/:string', (req, res) => {
@@ -210,74 +254,133 @@ module.exports = function (app, connection, log) {
     res.send(sender.sendMessages(msgSent));
   })
 
-  app.get('/registers/captures', (req, res) => {
+  app.get('/registers/captures', async (req, res) => {
     console.log('get registers/captures: ', req.query)
-    var results = []
+    var results = [];
+
     var snapshots = azureClient.db("pas_reloads").collection("captures");
 
-    if (req.query["tenantId"] === null) {
-      snapshots.find({ "Retailer": req.query["retailerId"] }).toArray(function (err, result) {
-        results = result;
-        let modifiedResults = []
-        for (var x of results) {
-          var y = x
+    const page = req.query.page ? Number(req.query.page) : 1;
+    const limit = req.query.limit ? Number(req.query.limit) : 10;
+    const skipValue = (page) * limit;
+    let filters = {}
 
-          y["Download"] = x["location"]["URL"]
-          y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-          y["CaptureType"] = x["values"]["CaptureType"]
-          if (x["values"]["Agent"]) {
-            y["Agent"] = x["values"]["Agent"]
-          } else {
-            y["Agent"] = "REMS"
-          }
-          if (!y["Store"])
-            y["Store"] = "REMS"
-          y["CaptureSource"] = x["values"]["CaptureSource"]
-
-          modifiedResults.push(y)
-        }
-        res.send(modifiedResults)
-      });
-    } else {
-      let modifiedResults = []
-      snapshots.find({ "Retailer": req.query["retailerId"] }).forEach(function (result) {
-        if (result.values.CaptureSource === 'REMS' && req.query["isAdmin"] === 'true') {
-          var y = result
-          y["Download"] = result["location"]["URL"]
-          y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
-          y["CaptureType"] = result["values"]["CaptureType"]
-          if (result["values"]["Agent"]) {
-            y["Agent"] = result["values"]["Agent"]
-          } else {
-            y["Agent"] = "REMS"
-          }
-          if (!y["Store"])
-            y["Store"] = "REMS"
-          y["CaptureSource"] = result["values"]["CaptureSource"]
-          modifiedResults.push(y)
-        }
-      }).then(() => {
-        snapshots.find({ "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"] }).forEach(function (result) {
-          var y = result
-          y["Download"] = result["location"]["URL"]
-          y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
-          y["CaptureType"] = result["values"]["CaptureType"]
-          if (result["values"]["Agent"]) {
-            y["Agent"] = result["values"]["Agent"]
-          } else {
-            y["Agent"] = "REMS"
-          }
-          if (!y["Store"])
-            y["Store"] = "REMS"
-          y["CaptureSource"] = result["values"]["CaptureSource"]
-
-          modifiedResults.push(y)
-        }).then(() => {
-          res.send(modifiedResults)
-        })
-      })
+    if (req.query?.Store) {
+      filters.Store = { $regex: req.query.Store }
     }
-  });
+
+    if (req.query?.Agent) {
+      filters['values.Agent'] = { $regex: req.query.Agent }
+    }
+
+    snapshots.count({ 'Retailer': req.query["retailerId"], ...filters }).then((totalItem) => {
+      if (req.query["tenantId"] === null) {
+        snapshots.find({ "Retailer": req.query["retailerId"], ...filters }).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
+          results = result;
+          let modifiedResults = []
+          for (var x of results) {
+            var y = x
+
+            y["Download"] = x["location"]["URL"]
+            y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+            y["CaptureType"] = x["values"]["CaptureType"]
+            if (x["values"]["Agent"]) {
+              y["Agent"] = x["values"]["Agent"]
+            } else {
+              y["Agent"] = "REMS"
+            }
+            if (!y["Store"])
+              y["Store"] = "REMS"
+            y["CaptureSource"] = x["values"]["CaptureSource"]
+
+            modifiedResults.push(y)
+          }
+          res.send({
+            items: modifiedResults,
+            pagination: {
+              limit,
+              page,
+              totalItem,
+              totalPage: Math.ceil(totalItem / limit)
+            }
+          })
+        });
+      } else {
+        let modifiedResults = []
+        if (req.query["isAdmin"] === 'true') {
+          snapshots.find({ "Retailer": req.query["retailerId"], "values.CaptureSource": 'REMS' }).forEach(function (result) {
+            var y = result
+            y["Download"] = result["location"]["URL"]
+            y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
+            y["CaptureType"] = result["values"]["CaptureType"]
+            if (result["values"]["Agent"]) {
+              y["Agent"] = result["values"]["Agent"]
+            } else {
+              y["Agent"] = "REMS"
+              if (!y["Store"])
+                y["Store"] = "REMS"
+              y["CaptureSource"] = result["values"]["CaptureSource"]
+              modifiedResults.push(y)
+            }
+          }).then(() => {
+            snapshots.find({ "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"], ...filters }).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).forEach(function (result) {
+              var y = result
+              y["Download"] = result["location"]["URL"]
+              y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
+              y["CaptureType"] = result["values"]["CaptureType"]
+              if (result["values"]["Agent"]) {
+                y["Agent"] = result["values"]["Agent"]
+              } else {
+                y["Agent"] = "REMS"
+              }
+              if (!y["Store"])
+                y["Store"] = "REMS"
+              y["CaptureSource"] = result["values"]["CaptureSource"]
+
+              modifiedResults.push(y)
+            }).then(() => {
+              res.send({
+                items: modifiedResults,
+                pagination: {
+                  limit,
+                  page,
+                  totalItem: modifiedResults.length,
+                  totalPage: Math.ceil(modifiedResults.length / limit)
+                }
+              })
+            })
+          })
+        } else {
+          snapshots.find({ "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"], ...filters }).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).forEach(function (result) {
+            var y = result
+            y["Download"] = result["location"]["URL"]
+            y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
+            y["CaptureType"] = result["values"]["CaptureType"]
+            if (result["values"]["Agent"]) {
+              y["Agent"] = result["values"]["Agent"]
+            } else {
+              y["Agent"] = "REMS"
+            }
+            if (!y["Store"])
+              y["Store"] = "REMS"
+            y["CaptureSource"] = result["values"]["CaptureSource"]
+
+            modifiedResults.push(y)
+          }).then(() => {
+            res.send({
+              items: modifiedResults,
+              pagination: {
+                limit,
+                page,
+                totalItem,
+                totalPage: Math.ceil(totalItem / limit)
+              }
+            })
+          })
+        }
+      }
+    })
+  })
 
   app.get('/registers/captures/:string', (req, res) => {
     j = JSON.parse(atob(req.params["string"]))
@@ -337,5 +440,32 @@ module.exports = function (app, connection, log) {
     res.send(sender.sendMessages(msgSent));
   })
 
-}
+  app.post("/registers/controlProcess", bodyParser.json(), (req, res) => {
+    console.log('Control Process request with: ', req.body)
 
+    // Construct the message to be sent
+
+    //process name - stop and start of the container
+    const processAction = req.body.command;
+
+    //name of the containerName
+    const containerName = req.body.container;
+    const retailerId = req.body.retailer_id;
+    const msgSent = {
+      "body": {
+        "retailer": retailerId,
+        "store": req.body.store,
+        "agent": req.body.agent,
+        "command": processAction,
+        "container": containerName
+      }
+    };
+
+    // Send the message
+    const sender = sbClient.createSender(retailerId.toLowerCase());
+    InsertAuditEntry('controlProcess', null, msgSent, req.cookies.user, { location: 'servicebus', serviceBus: 'remscomm.servicebus.windows.net', sharedAccessKeyName: 'dashboard-express', queue: retailerId.toLowerCase() })
+    res.send(sender.sendMessages(msgSent));
+  });
+
+
+}

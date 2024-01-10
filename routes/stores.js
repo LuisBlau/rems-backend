@@ -32,34 +32,62 @@ module.exports = function (app) {
         console.log("Get /stores/getForRetailer called with: ", req.query)
         let filters = {}
 
-        const agents = azureClient.db("pas_software_distribution").collection("stores");
+        const stores = azureClient.db("pas_software_distribution").collection("stores");
         const retailers = azureClient.db("pas_software_distribution").collection("retailers");
+        const agents = azureClient.db("pas_software_distribution").collection("agents");
         if (req.query["isTenant"] === 'false') {
-            agents.find({ retailer_id: req.query["retailerId"], ...filters }, {}).toArray(function (err, agentList) {
+            stores.find({ retailer_id: req.query["retailerId"], ...filters }, {}).toArray(function (err, storeList) {
                 if (err) {
                     const msg = { "error": err }
                     res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                     throw err
-                } else if (!agentList) {
+                } else if (!storeList) {
                     const msg = { "message": "Agents: Error reading from server" }
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
-                    res.status(statusCode.OK).json(agentList);
+                    const promises = storeList.map(store => {
+                        return agents.find({ retailer_id: req.query["retailerId"], storeName: store.storeName, is_master_agent: true }).toArray()
+                            .then(masterAgents => {
+                                return {
+                                    ...store,
+                                    agentName: masterAgents?.[0]?.agentName
+                                };
+                            });
+                    });
+                    Promise.all(promises).then(storeListArray => {
+                        res.status(statusCode.OK).json(storeListArray);
+                    }).catch(error => {
+                        res.status(500).json({ error: 'An error occurred while fetching agentName' });
+                    });
                 }
             });
         } else if (req.query["tenantId"] !== undefined) {
-            agents.find({ retailer_id: req.query["retailerId"], tenant_id: req.query["tenantId"], ...filters }, {}).toArray(function (err, agentList) {
+            stores.find({ retailer_id: req.query["retailerId"], tenant_id: req.query["tenantId"], ...filters }, {}).toArray(function (err, storeList) {
                 if (err) {
                     const msg = { "error": err }
                     res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                     throw err
-                } else if (!agentList) {
+                } else if (!storeList) {
                     const msg = { "message": "Agents: Error reading from server" }
                     res.status(statusCode.NO_CONTENT).json(msg);
                 }
                 else {
-                    res.status(statusCode.OK).json(agentList);
+                    const promises = storeList.map(store => {
+                        return agents.find({ retailer_id: req.query["retailerId"], storeName: store.storeName, is_master_agent: true }).toArray()
+                            .then(masterAgents => {
+                                return {
+                                    ...store,
+                                    agentName: masterAgents?.[0]?.agentName
+                                };
+                            });
+                    });
+                    Promise.all(promises).then(storeListArray => {
+                        res.status(statusCode.OK).json(storeListArray);
+                    }).catch(error => {
+                        res.status(500).json({ error: 'An error occurred while fetching agentName' });
+                    });
+                  //  res.status(statusCode.OK).json(storeList);
                 }
             });
         } else {
@@ -75,17 +103,31 @@ module.exports = function (app) {
                     tenantList.forEach(tenantBearingRemsServer => {
                         tenantBearingRemsServer.tenants.forEach(tenant => {
                             if (tenant.retailer_id === req.query["retailerId"]) {
-                                agents.find({ retailer_id: tenantBearingRemsServer.retailer_id, tenant_id: tenant.retailer_id }).toArray(function (err, agentList) {
+                                stores.find({ retailer_id: tenantBearingRemsServer.retailer_id, tenant_id: tenant.retailer_id }).toArray(function (err, storeList) {
                                     if (err) {
                                         const msg = { "error": err }
                                         res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
                                         throw err
-                                    } else if (!agentList) {
+                                    } else if (!storeList) {
                                         const msg = { "message": "Agents: Error reading from server" }
                                         res.status(statusCode.NO_CONTENT).json(msg);
                                     }
                                     else {
-                                        res.status(statusCode.OK).json(agentList)
+                                        const promises = storeList.map(store => {
+                                            return agents.find({ retailer_id: req.query["retailerId"], storeName: store.storeName, is_master_agent: true }).toArray()
+                                                .then(masterAgents => {
+                                                    return {
+                                                        ...store,
+                                                        agentName: masterAgents?.[0]?.agentName
+                                                    };
+                                                });
+                                        });
+                                        Promise.all(promises).then(storeListArray => {
+                                            res.status(statusCode.OK).json(storeListArray);
+                                        }).catch(error => {
+                                            res.status(500).json({ error: 'An error occurred while fetching agentName' });
+                                        });
+                                        //res.status(statusCode.OK).json(storeList)
                                     }
                                 })
                             }

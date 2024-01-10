@@ -8,52 +8,24 @@ var azureClient = new mongodb.MongoClient("mongodb://pas-test-nosql-db:1Xur1znUv
 azureClient.connect();
 
 module.exports = function (app) {
-    app.get('/dumps/getDumps', (req, res) => {
+    app.get('/dumps/getDumps', async (req, res) => {
         console.log('/dumps/getDumps called with: ', req.query)
-        if (req.query["tenantId"] === null) {
-            var results = []
-            var filter = { "Retailer": req.cookies["retailerId"] };
+        var query = { "Retailer": req.query["retailerId"] };
 
-            if (req.query["store"] != undefined && req.query["store"] != 'undefined') {
-                filter.Store = req.query['store']
-            }
+        if (req.query["Store"]) {
+            query.Store = { $regex: req.query.Store }
+        }
 
-            var snapshots = azureClient.db("pas_reloads").collection("dumps");
-            let query = { "Retailer": req.cookies["retailerId"] }
-            if ("Store" in req.query) query["Store"] = req.query["Store"]
-            snapshots.find(query).toArray(function (err, result) {
-                results = result;
-                let modifiedResults = []
-                for (var x of results) {
-                    var y = x
+        var snapshots = azureClient.db("pas_reloads").collection("dumps");
+        const page = req.query.page ? Number(req.query.page) : 1;
+        const limit = req.query.limit ? Number(req.query.limit) : 10;
+        const skipValue = (page) * limit;
 
-                    y["Download"] = x["location"]["URL"]
-                    y["Version"] = x["values"]["Version"]
-                    y["Reason"] = x["values"]["Reason"]
-                    if (x["RegNum"]) {
-                        y["System"] = "Register " + x["RegNum"]
-                    } else {
-                        y["System"] = x["values"]["Controller ID"]
-                    }
-                    y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-                    y["ExtractType"] = x["values"]["ExtractType"]
-                    y["State"] = x["values"]["State"]
-                    y["Rids"] = x["values"]["rids"]
+        snapshots.count(query).then((totalItem) => {
+            if (req.query["tenantId"] === null) {
+                var results = []
 
-                    modifiedResults.push(y)
-                }
-                res.send(modifiedResults)
-            });
-        } else {
-            var results = []
-            if (req.query["retailerId"] !== 'null') {
-                var filter = { "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"] };
-                if (req.query["store"] !== undefined && req.query["store"] !== 'undefined') {
-                    filter.Store = req.query['store']
-                }
-
-                var snapshots = azureClient.db("pas_reloads").collection("dumps");
-                snapshots.find(filter).toArray(function (err, result) {
+                snapshots.find(query).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
                     results = result;
                     let modifiedResults = []
                     for (var x of results) {
@@ -74,13 +46,56 @@ module.exports = function (app) {
 
                         modifiedResults.push(y)
                     }
-                    res.send(modifiedResults)
+                    res.send({
+                        items: modifiedResults,
+                        pagination: {
+                            limit,
+                            page,
+                            totalItem,
+                            totalPage: Math.ceil(totalItem / limit)
+                        }
+                    })
                 });
+            } else {
+                var results = []
+                if (req.query["retailerId"] !== 'null') {
+                    snapshots.find(query).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
+                        results = result;
+                        let modifiedResults = []
+                        for (var x of results) {
+                            var y = x
+
+                            y["Download"] = x["location"]["URL"]
+                            y["Version"] = x["values"]["Version"]
+                            y["Reason"] = x["values"]["Reason"]
+                            if (x["RegNum"]) {
+                                y["System"] = "Register " + x["RegNum"]
+                            } else {
+                                y["System"] = x["values"]["Controller ID"]
+                            }
+                            y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+                            y["ExtractType"] = x["values"]["ExtractType"]
+                            y["State"] = x["values"]["State"]
+                            y["Rids"] = x["values"]["rids"]
+
+                            modifiedResults.push(y)
+                        }
+                        res.send({
+                            items: modifiedResults,
+                            pagination: {
+                                limit,
+                                page,
+                                totalItem,
+                                totalPage: Math.ceil(totalItem / limit)
+                            }
+                        })
+                    });
+                }
             }
-        }
+        })
     });
 
-    app.get('/dumps/getDumpsForStore', (req, res) => {
+    app.get('/dumps/getDumpsForStore', async (req, res) => {
         console.log('/dumps/getDumpsForStore with: ', req.query)
         var snapshots = azureClient.db("pas_reloads").collection("dumps");
         let query = {}
@@ -89,36 +104,51 @@ module.exports = function (app) {
         } else {
             query = { Retailer: req.query.retailerId, Store: req.query.storeName, tenant_id: req.query.tenantId }
         }
-        snapshots.find(query).toArray(function (err, results) {
-            if (err) {
-                const msg = { "error": err }
-                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                throw err
-            } else if (!results) {
-                const msg = { "message": "No dumps found for store" }
-                res.status(statusCode.NO_CONTENT).json(msg);
-            } else {
-                let modifiedResults = []
-                for (var x of results) {
-                    var y = x
 
-                    y["Download"] = x["location"]["URL"]
-                    y["Version"] = x["values"]["Version"]
-                    y["Reason"] = x["values"]["Reason"]
-                    if (x["RegNum"]) {
-                        y["System"] = "Register " + x["RegNum"]
-                    } else {
-                        y["System"] = x["values"]["Controller ID"]
+        const page = req.query.page ? Number(req.query.page) : 1;
+        const limit = req.query.limit ? Number(req.query.limit) : 10;
+        const skipValue = (page) * limit;
+
+        snapshots.count(query).then((totalItem) => {
+            snapshots.find(query).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, results) {
+                if (err) {
+                    const msg = { "error": err }
+                    res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                    throw err
+                } else if (!results) {
+                    const msg = { "message": "No dumps found for store" }
+                    res.status(statusCode.NO_CONTENT).json(msg);
+                } else {
+                    let modifiedResults = []
+                    for (var x of results) {
+                        var y = x
+
+                        y["Download"] = x["location"]["URL"]
+                        y["Version"] = x["values"]["Version"]
+                        y["Reason"] = x["values"]["Reason"]
+                        if (x["RegNum"]) {
+                            y["System"] = "Register " + x["RegNum"]
+                        } else {
+                            y["System"] = x["values"]["Controller ID"]
+                        }
+                        y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+                        y["ExtractType"] = x["values"]["ExtractType"]
+                        y["State"] = x["values"]["State"]
+                        y["Rids"] = x["values"]["rids"]
+
+                        modifiedResults.push(y)
                     }
-                    y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-                    y["ExtractType"] = x["values"]["ExtractType"]
-                    y["State"] = x["values"]["State"]
-                    y["Rids"] = x["values"]["rids"]
-
-                    modifiedResults.push(y)
+                    res.send({
+                        items: modifiedResults,
+                        pagination: {
+                            limit,
+                            page,
+                            totalItem,
+                            totalPage: Math.ceil(totalItem / limit)
+                        }
+                    })
                 }
-                res.send(modifiedResults)
-            }
+            })
         })
     });
 }
