@@ -447,46 +447,49 @@ module.exports = function (app, connection, log) {
             }
 
             for (var i = 0; i < req.body.steps.length; i++) {
-                if (req.body.steps[i].type !== null) {
+                if (req.body.steps[i].type !== null && req.body.steps[i].type !== undefined) {
                     toInsert.steps.push({
                         type: req.body.steps[i].type,
                         ...req.body.steps[i].arguments
                     })
                 }
             }
-
-            if (req.query["tenantId"] === undefined) {
-                deployConfig.findOneAndUpdate({ "name": req.body.name, "retailer_id": retailerId }, { "$set": toInsert }, { upsert: true }, function (err, result) {
-                    if (result.value !== null) {
-                        InsertAuditEntry('update', result.value, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
-                    } else {
-                        InsertAuditEntry('insert', null, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
-                    }
-                    if (err) {
-                        const msg = { "error": err }
-                        // TODO: why is this commented out?
-                        //res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                        throw err;
-                    }
-                });
+            if (toInsert.steps.length > 0) {
+                if (req.query["tenantId"] === undefined) {
+                    deployConfig.findOneAndUpdate({ "name": req.body.name, "retailer_id": retailerId }, { "$set": toInsert }, { upsert: true }, function (err, result) {
+                        if (result.value !== null) {
+                            InsertAuditEntry('update', result.value, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
+                        } else {
+                            InsertAuditEntry('insert', null, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
+                        }
+                        if (err) {
+                            const msg = { "error": err }
+                            // TODO: why is this commented out?
+                            //res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                            throw err;
+                        }
+                    });
+                } else {
+                    deployConfig.findOneAndUpdate({ "name": req.body.name, "retailer_id": retailerId, "tenant_id": req.query["tenantId"] }, { "$set": toInsert }, { upsert: true }, function (err, result) {
+                        if (result.value !== null) {
+                            InsertAuditEntry('update', result.value, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
+                        } else {
+                            InsertAuditEntry('insert', null, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
+                        }
+                        if (err) {
+                            const msg = { "error": err }
+                            // TODO: why is this commented out?
+                            //res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                            throw err;
+                        }
+                    });
+                }
+                const msg = { "message": "Success" }
+                res.status(statusCode.OK).json(msg);
             } else {
-                deployConfig.findOneAndUpdate({ "name": req.body.name, "retailer_id": retailerId, "tenant_id": req.query["tenantId"] }, { "$set": toInsert }, { upsert: true }, function (err, result) {
-                    if (result.value !== null) {
-                        InsertAuditEntry('update', result.value, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
-                    } else {
-                        InsertAuditEntry('insert', null, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'deploy-config' })
-                    }
-                    if (err) {
-                        const msg = { "error": err }
-                        // TODO: why is this commented out?
-                        //res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
-                        throw err;
-                    }
-                });
+                const msg = { "message": "Must contain one or more step implementations..." }
+                res.status(statusCode.BAD_REQUEST).json(msg)
             }
-
-            const msg = { "message": "Success" }
-            res.status(statusCode.OK).json(msg);
         })
     })
 
