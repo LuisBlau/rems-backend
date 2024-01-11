@@ -447,10 +447,12 @@ module.exports = function (app, connection, log) {
             }
 
             for (var i = 0; i < req.body.steps.length; i++) {
-                toInsert.steps.push({
-                    type: req.body.steps[i].type,
-                    ...req.body.steps[i].arguments
-                })
+                if (req.body.steps[i].type !== null) {
+                    toInsert.steps.push({
+                        type: req.body.steps[i].type,
+                        ...req.body.steps[i].arguments
+                    })
+                }
             }
 
             if (req.query["tenantId"] === undefined) {
@@ -909,11 +911,11 @@ module.exports = function (app, connection, log) {
                                                 "apply_time": req.body["dateTime"] || null,
                                                 "deploy": req.body["deploy"],
                                                 "config_id": config.id,
-                                                "id" : maxId,
+                                                "id": maxId,
                                                 "package": req.body["name"],
                                                 "retailer_id": req.body["retailerId"],
                                                 "storeName": rec.storeName,
-                                                "status" : "Initial",
+                                                "status": "Initial",
                                                 "agentName": rec.agentName,
                                                 "steps": rec.steps
                                             }
