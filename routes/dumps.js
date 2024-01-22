@@ -80,37 +80,38 @@ module.exports = function (app) {
                 var results = []
                 if (req.query["retailerId"] !== 'null') {
                     snapshots.find(query).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
-                    snapshots.find({ ...query, ...filter }).sort(sortBy).skip(skipValue).limit(limit).toArray(function (err, result) {
-                        results = result;
-                        let modifiedResults = []
-                        for (var x of results) {
-                            var y = x
+                        snapshots.find({ ...query, ...filter }).sort(sortBy).skip(skipValue).limit(limit).toArray(function (err, result) {
+                            results = result;
+                            let modifiedResults = []
+                            for (var x of results) {
+                                var y = x
 
-                            y["Download"] = x["location"]["URL"]
-                            y["Version"] = x["values"]["Version"]
-                            y["Reason"] = x["values"]["Reason"]
-                            if (x["RegNum"]) {
-                                y["System"] = "Register " + x["RegNum"]
-                            } else {
-                                y["System"] = x["values"]["Controller ID"]
-                            }
-                            y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
-                            y["ExtractType"] = x["values"]["ExtractType"]
-                            y["State"] = x["values"]["State"]
-                            y["Rids"] = x["values"]["rids"]
+                                y["Download"] = x["location"]["URL"]
+                                y["Version"] = x["values"]["Version"]
+                                y["Reason"] = x["values"]["Reason"]
+                                if (x["RegNum"]) {
+                                    y["System"] = "Register " + x["RegNum"]
+                                } else {
+                                    y["System"] = x["values"]["Controller ID"]
+                                }
+                                y["SBreqLink"] = "/api/registers/extracts/" + btoa(unescape(encodeURIComponent(JSON.stringify(x).replace("/\s\g", ""))))
+                                y["ExtractType"] = x["values"]["ExtractType"]
+                                y["State"] = x["values"]["State"]
+                                y["Rids"] = x["values"]["rids"]
 
-                            modifiedResults.push(y)
-                        }
-                        res.send({
-                            items: modifiedResults,
-                            pagination: {
-                                limit,
-                                page,
-                                totalItem,
-                                totalPage: Math.ceil(totalItem / limit)
+                                modifiedResults.push(y)
                             }
-                        })
-                    });
+                            res.send({
+                                items: modifiedResults,
+                                pagination: {
+                                    limit,
+                                    page,
+                                    totalItem,
+                                    totalPage: Math.ceil(totalItem / limit)
+                                }
+                            })
+                        });
+                    })
                 }
             }
         })
