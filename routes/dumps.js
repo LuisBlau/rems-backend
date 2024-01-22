@@ -12,20 +12,40 @@ module.exports = function (app) {
         console.log('/dumps/getDumps called with: ', req.query)
         var query = { "Retailer": req.query["retailerId"] };
 
-        if (req.query["Store"]) {
-            query.Store = { $regex: req.query.Store }
-        }
-
         var snapshots = azureClient.db("pas_reloads").collection("dumps");
         const page = req.query.page ? Number(req.query.page) : 1;
         const limit = req.query.limit ? Number(req.query.limit) : 10;
         const skipValue = (page) * limit;
+        let filter = {};
+        let sortBy = {}
+
+        if (req.query?.filter) {
+            Object.keys(JSON.parse(req.query.filter)).forEach(function eachKey(key) {
+                if (JSON.parse(req.query.filter)[key] !== '') {
+                    if (key === 'System') {
+                        filter = { ['RegNum']: { $regex: JSON.parse(req.query.filter)[key] } }
+                    } else if (key === 'Reason') {
+                        filter = { ['values.Reason']: { $regex: JSON.parse(req.query.filter)[key] } }
+                    } else {
+                        filter = { [key]: { $regex: JSON.parse(req.query.filter)[key] } }
+                    }
+                }
+            })
+        }
+
+        if (req.query?.sort) {
+            Object.keys(JSON.parse(req.query.sort)).forEach(function eachKey(key) {
+                if (JSON.parse(req.query.sort)[key] !== '') {
+                    sortBy = { [key]: JSON.parse(req.query.sort)[key] }
+                }
+            })
+        }
 
         snapshots.count(query).then((totalItem) => {
             if (req.query["tenantId"] === null) {
                 var results = []
 
-                snapshots.find(query).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
+                snapshots.find({ ...query, ...filter }).sort(sortBy).skip(skipValue).limit(limit).toArray(function (err, result) {
                     results = result;
                     let modifiedResults = []
                     for (var x of results) {
@@ -60,6 +80,7 @@ module.exports = function (app) {
                 var results = []
                 if (req.query["retailerId"] !== 'null') {
                     snapshots.find(query).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
+                    snapshots.find({ ...query, ...filter }).sort(sortBy).skip(skipValue).limit(limit).toArray(function (err, result) {
                         results = result;
                         let modifiedResults = []
                         for (var x of results) {
