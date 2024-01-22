@@ -94,18 +94,34 @@ module.exports = function (app, connection, log) {
     const page = req.query.page ? Number(req.query.page) : 1;
     const limit = req.query.limit ? Number(req.query.limit) : 10;
     const skipValue = (page) * limit;
-    let filters = {};
+    let filter = {};
+    let sortBy = {}
 
-    if (req.query?.Store) {
-      filters.Store = { $regex: req.query.Store }
-    }
-    if (req.query?.RegNum) {
-      filters.RegNum = { $regex: req.query.RegNum }
+    if (req.query?.filter) {
+      Object.keys(JSON.parse(req.query.filter)).forEach(function eachKey(key) {
+        if (JSON.parse(req.query.filter)[key] !== '') {
+          if (key === 'State') {
+            filter = { ['values.State']: { $regex: JSON.parse(req.query.filter)[key] } }
+          } else if (key === 'ExtractType') {
+            filter = { ['values.ExtractType']: { $regex: JSON.parse(req.query.filter)[key] } }
+          } else {
+            filter = { [key]: { $regex: JSON.parse(req.query.filter)[key] } }
+          }
+        }
+      })
     }
 
-    snapshots.count({ ...query, ...filters }).then((totalItem) => {
+    if (req.query?.sort) {
+      Object.keys(JSON.parse(req.query.sort)).forEach(function eachKey(key) {
+        if (JSON.parse(req.query.sort)[key] !== '') {
+          sortBy = { [key]: JSON.parse(req.query.sort)[key] }
+        }
+      })
+    }
+
+    snapshots.count({ ...query, ...filter }).then((totalItem) => {
       if (req.query["tenantId"] === null) {
-        snapshots.find({ ...query, ...filters }).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
+        snapshots.find({ ...query, ...filter }).sort(sortBy).skip(skipValue).limit(limit).toArray(function (err, result) {
           results = result;
           let modifiedResults = []
           for (var x of results) {
@@ -131,7 +147,7 @@ module.exports = function (app, connection, log) {
         });
       } else {
         let query = { "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"] }
-        snapshots.find({ ...query, ...filters }).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
+        snapshots.find({ ...query, ...filter }).sort(sortBy).skip(skipValue).limit(limit).toArray(function (err, result) {
           results = result;
           let modifiedResults = []
           for (var x of results) {
@@ -263,19 +279,54 @@ module.exports = function (app, connection, log) {
     const page = req.query.page ? Number(req.query.page) : 1;
     const limit = req.query.limit ? Number(req.query.limit) : 10;
     const skipValue = (page) * limit;
-    let filters = {}
-
-    if (req.query?.Store) {
-      filters.Store = { $regex: req.query.Store }
+    let filter = {}
+    let filterIsRems = true
+    let sortBy = {}
+    if (req.query?.filter) {
+      Object.keys(JSON.parse(req.query.filter)).forEach(function eachKey(key) {
+        if ((JSON.parse(req.query.filter)[key]).toUpperCase() !== 'REMS') {
+          filterIsRems = false
+          if (JSON.parse(req.query.filter)[key] !== '') {
+            if (key === 'Agent') {
+              filter = { ['values.Agent']: { $regex: JSON.parse(req.query.filter)[key] } }
+            } else if (key === 'CaptureType') {
+              filter = { ['values.CaptureType']: { $regex: JSON.parse(req.query.filter)[key] } }
+            } else if (key === 'CaptureSource') {
+              filter = { ['values.CaptureSource']: { $regex: JSON.parse(req.query.filter)[key] } }
+            } else {
+              filter = { [key]: { $regex: JSON.parse(req.query.filter)[key] } }
+            }
+          }
+        } else {
+          filterIsRems = true
+          if (JSON.parse(req.query.filter)[key] !== '') {
+            filter = { ['values.CaptureSource']: { $regex: 'REMS' } }
+          }
+        }
+      })
     }
 
-    if (req.query?.Agent) {
-      filters['values.Agent'] = { $regex: req.query.Agent }
+    if (req.query?.sort) {
+      Object.keys(JSON.parse(req.query.sort)).forEach(function eachKey(key) {
+        if (JSON.parse(req.query.sort)[key] !== '') {
+          if (key === 'Agent') {
+            sortBy = { ["values.Agent"]: JSON.parse(req.query.sort)[key] }
+          } else if (key === 'CaptureType') {
+            sortBy = { ["values.CaptureType"]: JSON.parse(req.query.sort)[key] }
+          } else if (key === 'Store') {
+            sortBy = { ['storeName']: JSON.parse(req.query.sort)[key] }
+          } else if (key === "CaptureSource") {
+            sortBy = { ['values.CaptureSource']: JSON.parse(req.query.sort)[key] }
+          } else {
+            sortBy = { [key]: JSON.parse(req.query.sort)[key] }
+          }
+        }
+      })
     }
 
-    snapshots.count({ 'Retailer': req.query["retailerId"], ...filters }).then((totalItem) => {
+    snapshots.count({ 'Retailer': req.query["retailerId"], ...filter }).then((totalItem) => {
       if (req.query["tenantId"] === null) {
-        snapshots.find({ "Retailer": req.query["retailerId"], ...filters }).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).toArray(function (err, result) {
+        snapshots.find({ "Retailer": req.query["retailerId"], ...filter }).sort(sortBy).skip(skipValue).limit(limit).toArray(function (err, result) {
           results = result;
           let modifiedResults = []
           for (var x of results) {
@@ -308,22 +359,8 @@ module.exports = function (app, connection, log) {
       } else {
         let modifiedResults = []
         if (req.query["isAdmin"] === 'true') {
-          snapshots.find({ "Retailer": req.query["retailerId"], "values.CaptureSource": 'REMS' }).forEach(function (result) {
-            var y = result
-            y["Download"] = result["location"]["URL"]
-            y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
-            y["CaptureType"] = result["values"]["CaptureType"]
-            if (result["values"]["Agent"]) {
-              y["Agent"] = result["values"]["Agent"]
-            } else {
-              y["Agent"] = "REMS"
-              if (!y["Store"])
-                y["Store"] = "REMS"
-              y["CaptureSource"] = result["values"]["CaptureSource"]
-              modifiedResults.push(y)
-            }
-          }).then(() => {
-            snapshots.find({ "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"], ...filters }).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).forEach(function (result) {
+          if (filterIsRems) {
+            snapshots.find({ $or: [{ "Retailer": req.query["retailerId"], "values.CaptureSource": 'REMS' }, { "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"], ...filter }] }).sort(JSON.parse(req.query.sort)).skip(skipValue).limit(limit).forEach(function (result) {
               var y = result
               y["Download"] = result["location"]["URL"]
               y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
@@ -336,7 +373,6 @@ module.exports = function (app, connection, log) {
               if (!y["Store"])
                 y["Store"] = "REMS"
               y["CaptureSource"] = result["values"]["CaptureSource"]
-
               modifiedResults.push(y)
             }).then(() => {
               res.send({
@@ -344,14 +380,40 @@ module.exports = function (app, connection, log) {
                 pagination: {
                   limit,
                   page,
-                  totalItem: modifiedResults.length,
+                  totalItem: totalItem,
                   totalPage: Math.ceil(modifiedResults.length / limit)
                 }
               })
             })
-          })
+          } else {
+            snapshots.find({ "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"], ...filter }).sort(JSON.parse(req.query.sort)).skip(skipValue).limit(limit).forEach(function (result) {
+              var y = result
+              y["Download"] = result["location"]["URL"]
+              y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
+              y["CaptureType"] = result["values"]["CaptureType"]
+              if (result["values"]["Agent"]) {
+                y["Agent"] = result["values"]["Agent"]
+              } else {
+                y["Agent"] = "REMS"
+              }
+              if (!y["Store"])
+                y["Store"] = "REMS"
+              y["CaptureSource"] = result["values"]["CaptureSource"]
+              modifiedResults.push(y)
+            }).then(() => {
+              res.send({
+                items: modifiedResults,
+                pagination: {
+                  limit,
+                  page,
+                  totalItem: totalItem,
+                  totalPage: Math.ceil(modifiedResults.length / limit)
+                }
+              })
+            })
+          }
         } else {
-          snapshots.find({ "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"], ...filters }).sort({ Timestamp: -1 }).skip(skipValue).limit(limit).forEach(function (result) {
+          snapshots.find({ "Retailer": req.query["retailerId"], "tenant_id": req.query["tenantId"], ...filter }).sort(JSON.parse(req.query.sort)).skip(skipValue).limit(limit).forEach(function (result) {
             var y = result
             y["Download"] = result["location"]["URL"]
             y["SBreqLink"] = "/api/registers/captures/" + btoa(unescape(encodeURIComponent(JSON.stringify(result).replace("/\s\g", ""))))
