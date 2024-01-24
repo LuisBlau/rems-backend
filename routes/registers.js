@@ -101,11 +101,11 @@ module.exports = function (app, connection, log) {
       Object.keys(JSON.parse(req.query.filter)).forEach(function eachKey(key) {
         if (JSON.parse(req.query.filter)[key] !== '') {
           if (key === 'State') {
-            filter = { ['values.State']: { $regex: JSON.parse(req.query.filter)[key] } }
+            filter = { ['values.State']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
           } else if (key === 'ExtractType') {
-            filter = { ['values.ExtractType']: { $regex: JSON.parse(req.query.filter)[key] } }
+            filter = { ['values.ExtractType']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
           } else {
-            filter = { [key]: { $regex: JSON.parse(req.query.filter)[key] } }
+            filter = { [key]: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
           }
         }
       })
@@ -288,13 +288,13 @@ module.exports = function (app, connection, log) {
           filterIsRems = false
           if (JSON.parse(req.query.filter)[key] !== '') {
             if (key === 'Agent') {
-              filter = { ['values.Agent']: { $regex: JSON.parse(req.query.filter)[key] } }
+              filter = { ['values.Agent']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
             } else if (key === 'CaptureType') {
-              filter = { ['values.CaptureType']: { $regex: JSON.parse(req.query.filter)[key] } }
+              filter = { ['values.CaptureType']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
             } else if (key === 'CaptureSource') {
-              filter = { ['values.CaptureSource']: { $regex: JSON.parse(req.query.filter)[key] } }
+              filter = { ['values.CaptureSource']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
             } else {
-              filter = { [key]: { $regex: JSON.parse(req.query.filter)[key] } }
+              filter = { [key]: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
             }
           }
         } else {

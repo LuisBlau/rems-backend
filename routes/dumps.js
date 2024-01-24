@@ -23,11 +23,11 @@ module.exports = function (app) {
             Object.keys(JSON.parse(req.query.filter)).forEach(function eachKey(key) {
                 if (JSON.parse(req.query.filter)[key] !== '') {
                     if (key === 'System') {
-                        filter = { ['RegNum']: { $regex: JSON.parse(req.query.filter)[key] } }
+                        filter = { ['RegNum']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
                     } else if (key === 'Reason') {
-                        filter = { ['values.Reason']: { $regex: JSON.parse(req.query.filter)[key] } }
+                        filter = { ['values.Reason']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
                     } else {
-                        filter = { [key]: { $regex: JSON.parse(req.query.filter)[key] } }
+                        filter = { [key]: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
                     }
                 }
             })
