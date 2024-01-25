@@ -284,23 +284,17 @@ module.exports = function (app, connection, log) {
     let sortBy = {}
     if (req.query?.filter) {
       Object.keys(JSON.parse(req.query.filter)).forEach(function eachKey(key) {
-        if ((JSON.parse(req.query.filter)[key]).toUpperCase() !== 'REMS') {
-          filterIsRems = false
-          if (JSON.parse(req.query.filter)[key] !== '') {
-            if (key === 'Agent') {
-              filter = { ['values.Agent']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
-            } else if (key === 'CaptureType') {
-              filter = { ['values.CaptureType']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
-            } else if (key === 'CaptureSource') {
-              filter = { ['values.CaptureSource']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
-            } else {
-              filter = { [key]: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
-            }
-          }
-        } else {
-          filterIsRems = true
-          if (JSON.parse(req.query.filter)[key] !== '') {
-            filter = { ['values.CaptureSource']: { $regex: 'REMS' } }
+        if (JSON.parse(req.query.filter)[key] !== '') {
+          if (key === 'Agent') {
+            filter = { $or: [{ ["values.Agent"]: { $regex: JSON.parse(req.query.filter)[key], $options: "i" } }, { $and: [{ ["values.CaptureSource"]: { $regex: JSON.parse(req.query.filter)[key], $options: "i" } }, { ["values.CaptureSource"]: { $ne: "RMA" } }] }] }
+          } else if (key === 'CaptureType') {
+            filter = { ['values.CaptureType']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
+          } else if (key === 'CaptureSource') {
+            filter = { ['values.CaptureSource']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
+          } else if (key === 'Store') {
+            filter = { $or: [{ ['values.CaptureSource']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }, { ['Store']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }] }
+          } else {
+            filter = { [key]: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
           }
         }
       })

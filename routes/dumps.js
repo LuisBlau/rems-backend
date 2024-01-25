@@ -23,7 +23,12 @@ module.exports = function (app) {
             Object.keys(JSON.parse(req.query.filter)).forEach(function eachKey(key) {
                 if (JSON.parse(req.query.filter)[key] !== '') {
                     if (key === 'System') {
-                        filter = { ['RegNum']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
+                        let isNum = /^\d+$/.test(JSON.parse(req.query.filter)[key])
+                        if (isNum) {
+                            filter = { ['RegNum']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
+                        } else {
+                            filter = { $or: [{ ['RegNum']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }, { $and: [{ ["values.Controller ID"]: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }, { ['RegNum']: null }] }] }
+                        }
                     } else if (key === 'Reason') {
                         filter = { ['values.Reason']: { $regex: JSON.parse(req.query.filter)[key], $options: 'i' } }
                     } else {
@@ -55,7 +60,7 @@ module.exports = function (app) {
                         y["Version"] = x["values"]["Version"]
                         y["Reason"] = x["values"]["Reason"]
                         if (x["RegNum"]) {
-                            y["System"] = "Register " + x["RegNum"]
+                            y["System"] = x["RegNum"]
                         } else {
                             y["System"] = x["values"]["Controller ID"]
                         }
@@ -90,7 +95,7 @@ module.exports = function (app) {
                                 y["Version"] = x["values"]["Version"]
                                 y["Reason"] = x["values"]["Reason"]
                                 if (x["RegNum"]) {
-                                    y["System"] = "Register " + x["RegNum"]
+                                    y["System"] = x["RegNum"]
                                 } else {
                                     y["System"] = x["values"]["Controller ID"]
                                 }
