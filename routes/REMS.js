@@ -621,7 +621,6 @@ module.exports = function (app, connection, log) {
                         }
                     }
                 });
-                console.log(agentsToSend)
                 res.status(200).json(agentsToSend)
             }
         })
@@ -964,15 +963,35 @@ module.exports = function (app, connection, log) {
         });
     });
 
-    app.get('/REMS/agents', (req, res) => {
+    app.get('/REMS/agents', async (req, res) => {
         console.log("Get /REMS/agents received : ", req.query);
+        const page = req.query.page ? Number(req.query.page) : 0;
+        const limit = req.query.limit ? Number(req.query.limit) : 1000000000;
+        const searchText = req.query.searchText;
+        const osType = req.query.osType;
+        const registerType = req.query.registerType;
+        const registerTypeValue = registerType == 'sco' ? true : false;
+
+        const skipValue = page * limit;
+
         let filters = {}
+        let sortBy = {}
+        let columnFilter = {}
 
         if (req.query.tenant) {
             filters.tenant_id = req.query.tenant
         }
 
+        if (registerType) {
+            filters.isSco = registerTypeValue;
+        }
+
+        if (osType) {
+            filters.os = osType;
+        }
+
         if (req.query.agentName) filters.agentName = req.query.agentName;
+
         if (req.query.onlyMasters == 'true') {
             console.log("onlyMasters : ", req.query.onlyMasters);
             filters.is_master = true;
@@ -983,8 +1002,51 @@ module.exports = function (app, connection, log) {
             filters.storeName = req.query.store;
         }
 
+        if (req.query?.filter) {
+            Object.keys(JSON.parse(req.query.filter)).forEach(function eachKey(key) {
+                if (JSON.parse(req.query.filter)[key] !== '') {
+                    if (key === 'agent') {
+                        columnFilter = { ['agentName']: { $regex: new RegExp(JSON.parse(req.query.filter)[key], 'i') } }
+                    } else if (key === 'Store') {
+                        columnFilter = { ['storeName']: { $regex: new RegExp(JSON.parse(req.query.filter)[key], 'i') } }
+                    } else {
+                        columnFilter = { [key]: { $regex: new RegExp(JSON.parse(req.query.filter)[key], 'i') } }
+                    }
+                }
+            })
+        }
+
+        if (req.query?.sort) {
+            Object.keys(JSON.parse(req.query.sort)).forEach(function eachKey(key) {
+                if (JSON.parse(req.query.sort)[key] !== '') {
+                    if (key === 'agent') {
+                        sortBy = { ["agentName"]: JSON.parse(req.query.sort)[key] }
+                    } else if (key === 'Store') {
+                        sortBy = { ["storeName"]: JSON.parse(req.query.sort)[key] }
+                    } else {
+                        sortBy = { [key]: JSON.parse(req.query.sort)[key] }
+                    }
+                }
+            })
+        }
+
         var agents = azureClient.db("pas_software_distribution").collection("agents");
-        agents.find({ retailer_id: req.query["retailer"], ...filters }).toArray(function (err, agentList) {
+
+        // Building the regex pattern for a 'like' search (case insensitive)
+        const searchPattern = new RegExp(searchText, 'i');
+
+        // Assuming 'name' is the field you want to search in
+        // Update the 'name' field with the actual field you want to search
+        const searchQuery = searchText ? { 'agentName': { $regex: searchPattern } } : {};
+
+        const totalItem = await agents.countDocuments({
+            retailer_id: req.query["retailer"],
+            ...columnFilter,
+            ...filters,
+            ...searchQuery
+        });
+
+        agents.find({ retailer_id: req.query["retailer"], ...filters, ...columnFilter,...searchQuery }).skip(skipValue).sort(sortBy).limit(limit).toArray(function (err, agentList) {
             if (err) {
                 const msg = { "error": err };
                 res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg);
@@ -994,8 +1056,19 @@ module.exports = function (app, connection, log) {
                 res.status(statusCode.NO_CONTENT).json(msg);
             }
             else {
+
+                res.status(statusCode.OK).json({
+                    items: agentList,
+                    pagination: {
+                        limit,
+                        page,
+                        totalItem,
+                        totalPage: Math.ceil(totalItem / limit)
+                    }
+                })
+
                 // console.log("sending agentList : ", agentList);
-                res.status(statusCode.OK).json(agentList);
+                //res.status(statusCode.OK).json(agentList);
             }
         });
     });
@@ -1348,6 +1421,41 @@ module.exports = function (app, connection, log) {
             return;
         });
     });
+    app.get('/REMS/agent-list', async (req, res) => {
+        var results = []
+        console.log('agent-list with: ', req.query)
+
+        var storeList = azureClient.db("pas_software_distribution").collection("agent-list");
+        let filters = { retailer_id: req.query["retailer"] }
+        if (req.query["tenant"] !== undefined) {
+            filters.tenant_id = req.query["tenant"]
+        }
+
+        storeList.find(filters).toArray(async function (err, result) {
+            if (err) {
+                const msg = { "error": err }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                res.send();
+            } else if (!result) {
+                const msg = { "message": "No store available for this retailer" }
+                res.status(statusCode.NO_CONTENT).json(msg);
+                res.send();
+            } else {
+                const storeListCollection = azureClient.db("pas_software_distribution").collection("store-list");
+                const resultsWithAgents = await Promise.all(result.map(async (item) => {
+                    try {
+                        const agents = await storeListCollection.findOne({ list_name: item.list_name });
+                        return { ...item, storeId: agents._id, agents: agents.agents };
+                    } catch (err) {
+                        return { ...item, storeId: null, agents: [] }; // Return the item with an empty agents array in case of error.
+                    }
+                }));
+
+                res.send(resultsWithAgents)
+            }
+
+        });
+    });
 
     app.get('/REMS/store-list', async (req, res) => {
         var results = []
@@ -1407,16 +1515,133 @@ module.exports = function (app, connection, log) {
 
         });
     });
-
-    app.post('/REMS/save-store-data', bodyParser.json(), (req, res) => {
+    app.post('/REMS/save-agent-data', bodyParser.json(), async (req, res) => {
         let filters = { retailer_id: req.query["retailerId"] };
-        if (req.body.id) filters.id = req.body.id;
+        if (req.body.id) filters._id = ObjectId(req.body.id);
         if (req.query["tenantId"] !== undefined) {
             filters.tenant_id = req.query["tenantId"]
         }
 
         //query biggest index
+        var deployConfig = azureClient.db("pas_software_distribution").collection("agent-list");
+        let checkDuplicateParams = { list_name: req.body.list_name };
+        if (req.body.id) {
+            checkDuplicateParams['_id'] = { $ne: ObjectId(req.body.id) };
+        }
+        const count = await deployConfig.countDocuments(checkDuplicateParams);
+        if (count > 0) {
+            const msg = { "error": 'List name already exist' };
+            res.status(statusCode.UNPROCESSABLE_ENTITY).json(msg);
+            return;
+        }
+
+        deployConfig.find({ filters, ...filter }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
+            if (err_find) {
+                const msg = { "error": err_find }
+                res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                throw err_find
+            }
+
+            if (req.body.id) {
+                const storeListUpdateQuery = { _id: ObjectId(req.body.id) };
+                if (req.query["tenantId"] !== undefined) {
+                    storeListUpdateQuery.tenant_id = req.query["tenantId"]
+                }
+                const storeListUpdateAgent = { $set: { filters: req.body.filters, last_updated: new Date().getTime() } }
+
+                deployConfig.findOneAndUpdate(storeListUpdateQuery, storeListUpdateAgent, function (err, result) {
+                    if (err) {
+                        const msg = { "error": err }
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        throw err;
+                    } else {
+                        const msg = { "message": "Success" }
+                        InsertAuditEntry('update', result.value, storeListUpdateAgent, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'agent-list' })
+                        res.status(statusCode.OK).json(msg);
+                    }
+                });
+
+            } else {
+
+                var index = 0;
+                if (result.length > 0) {
+                    index = result[0].id;
+                }
+                index++;
+
+                var toInsert = {
+                    list_name: req.body.list_name,
+                    retailer_id: req.query["retailerId"],
+                    filters: req.body.filters,
+                    last_updated: new Date().getTime()
+                }
+
+                if (req.query["tenantId"] !== undefined) {
+                    toInsert.tenant_id = req.query["tenantId"]
+                }
+
+                deployConfig.insertOne(toInsert, function (err, result) {
+                    if (err) {
+                        const msg = { "error": err }
+                        res.status(statusCode.INTERNAL_SERVER_ERROR).json(msg)
+                        throw err;
+                    } else {
+                        InsertAuditEntry('insert', null, toInsert, req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'agent-list' })
+                        const msg = { "message": "Success" }
+                        res.status(statusCode.OK).json(msg);
+                    }
+                });
+            }
+        });
+    });
+
+    app.post('/REMS/save-store-data', bodyParser.json(), async (req, res) => {
+        console.log(req.body)
+        let filters = { retailer_id: req.query["retailerId"] };
+        if (req.body.id) filters._id = ObjectId(req.body.id);
+        if (req.query["tenantId"] !== undefined) {
+            filters.tenant_id = req.query["tenantId"]
+        }
+        //query biggest index
         var deployConfig = azureClient.db("pas_software_distribution").collection("store-list");
+
+        let checkDuplicateParams = { list_name: req.body.list_name };
+        if (req.body.id) {
+            checkDuplicateParams['_id'] = { $ne: ObjectId(req.body.id) };
+        }
+        const count = await deployConfig.countDocuments(checkDuplicateParams);
+        if (count > 0) {
+            const msg = { "error": 'List name already exist' };
+            res.status(statusCode.UNPROCESSABLE_ENTITY).json(msg);
+            return;
+        }
+        //Agent List Start
+        const searchText = req.body?.filters?.searchText;
+        const osType = req.body?.filters?.osType;
+        const registerType = req.body?.filters?.registerType;
+        const registerTypeValue = registerType == 'sco' ? true : false;
+        let filterAgents = {}
+        if (registerType) {
+            filterAgents.isSco = registerTypeValue;
+        }
+        if (osType) {
+            filterAgents.os = osType;
+        }
+        var agents = azureClient.db("pas_software_distribution").collection("agents");
+        const searchPattern = new RegExp(searchText, 'i');
+        const searchQuery = searchText ? { 'agentName': { $regex: searchPattern } } : {};
+        const query = { retailer_id: req.query["retailerId"], ...filterAgents, ...searchQuery };
+        if (req.query["tenantId"] !== undefined) {
+            query['tenant_id'] = req.query["tenantId"];
+        }
+        console.log({ query })
+        const agentsData = await agents.find(
+            query,
+            { projection: { agentName: 1 } }
+        ).toArray();
+        const agentNames = agentsData?.map(agent => agent.agentName);
+        //Agent List End
+
         deployConfig.find({ filters, ...filter }).sort({ id: -1 }).limit(1).toArray(function (err_find, result) {
 
             if (err_find) {
@@ -1427,11 +1652,11 @@ module.exports = function (app, connection, log) {
 
             if (req.body.id) {
 
-                const storeListUpdateQuery = { retailer_id: req.query["retailerId"], list_name: req.body.list_name, id: req.body.id };
+                const storeListUpdateQuery = { _id: ObjectId(req.body.id) };
                 if (req.query["tenantId"] !== undefined) {
-                    storeListUpdateQuery.tenant_id = req.query["tenantId"]
+                    storeListUpdateQuery.tenant_id = req.query["tenantId"];
                 }
-                const storeListUpdateAgent = { $set: { agents: req.body.agents } }
+                const storeListUpdateAgent = { $set: { agents: agentNames } }
 
                 deployConfig.findOneAndUpdate(storeListUpdateQuery, storeListUpdateAgent, function (err, result) {
                     if (err) {
@@ -1464,7 +1689,14 @@ module.exports = function (app, connection, log) {
                     toInsert.tenant_id = req.query["tenantId"]
                 }
 
-                toInsert.agents = toInsert.agents.concat(req.body.agents);
+                /*
+                    get agents collection from mongo db
+                        db.("pas_software_distribution").collection("agents")
+                    filter _that_ by the filter criteria
+                    store those in your array, push them to the insert
+
+                */
+                toInsert.agents = toInsert.agents.concat(agentNames);
                 deployConfig.insertOne(toInsert, function (err, result) {
                     if (err) {
                         const msg = { "error": err }
@@ -1479,6 +1711,12 @@ module.exports = function (app, connection, log) {
             }
         });
     });
+    app.get("/REMS/deleteAgentData", (req, res) => {
+        azureClient.db("pas_software_distribution").collection("agent-list").findOneAndDelete({ "_id": ObjectId(req.query.id) }, function (err, result) {
+            InsertAuditEntry('delete', result.value, 'delete', req.cookies.user, { location: 'pas_mongo_database', database: 'pas_software_distribution', collection: 'agent-list' })
+            res.sendStatus(200)
+        })
+    })
 
     app.get('/REMS/retailerids', (req, res) => {
         console.log("Get /REMS/rems received : ", req.query)
