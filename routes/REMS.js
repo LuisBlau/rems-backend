@@ -493,28 +493,34 @@ module.exports = function (app, connection, log) {
         })
     })
 
-    app.get('/REMS/deploys', async (req, res) => {
+   app.get('/REMS/deploys', async (req, res) => {
         console.log('/REMS/deploys with: ', req.query)
-        const page = req.query.page ? Number(req.query.page) : 1;
+        const page = req.query.page ? Number(req.query.page) : 0;
         const limit = req.query.limit ? Number(req.query.limit) : 100;
-        const skipValue = (page - 1) * limit;
-        let sortBy = {}
-        let filters = {}
+        const skipValue = page * limit;
+        let sortBy = { 'data._id': 1 };
+        let filters = {};
+        if (req.query.retailerId) filters['data.retailer_id'] = req.query.retailerId;
         if (req.query["tenantId"]) {
-            filters.tenant_id = req.query["tenantId"]
+            filters['data.tenant_id'] = req.query["tenantId"]
         }
+        if (req.query.store) filters['data.agentName'] = { $regex: ".*" + req.query.store + ".*" }
+        if (req.query.package) filters['data.package'] = req.query.package
+        if (req.query.status) filters['data.status'] = req.query.status;
         if (req.query.search) {
             filters = {
+                ...filters,
                 '$or': [
                     {
-                        storeName: { $regex: req.query.search, $options: "i" },
+                        'data.storeName': { $regex: req.query.search, $options: "i" },
                     },
                     {
-                        package: { $regex: req.query.search, $options: "i" },
+                        'data.package': { $regex: req.query.search, $options: "i" },
                     }
                 ],
             };
         }
+
         if (req.query.orderBy) {
             let direction = 1;
             switch (req.query?.order) {
@@ -534,20 +540,43 @@ module.exports = function (app, connection, log) {
                     direction = 1;
                     break;
             }
-            sortBy = { [req.query.orderBy]: direction }
+            sortBy = { [`data.${req.query.orderBy}`]: direction }
         }
         const deploys = azureClient.db("pas_software_distribution").collection("deployments");
-        const totalItem = await deploys.countDocuments({ retailer_id: req.query["retailerId"], ...filters });
-        const records = await deploys.find({ retailer_id: req.query["retailerId"], ...filters }).sort(sortBy).skip(skipValue).limit(limit).toArray();
-        res.status(200).json({
-            items: records,
-            pagination: {
-                limit,
-                page,
-                totalItem,
-                totalPage: Math.ceil(totalItem / limit)
+        const result = await deploys.aggregate([
+            {
+                $group: {
+                    _id: "$id",
+                    data: {
+                        $first: "$$ROOT"
+                    }
+                }
+            },
+            {
+                $match: filters
+            },
+            {
+                $facet: {
+                    items: [
+                        {
+                            $sort: sortBy
+                        },
+                        {
+                            $skip: skipValue
+                        },
+                        {
+                            $limit: limit
+                        }
+                    ],
+                    counts: [
+                        {
+                            $count: "totalItem"
+                        }
+                    ]
+                }
             }
-        });
+        ]).toArray();
+        res.status(200).json(result[0]);
     });
 
     app.get('/REMS/deploy-configs', (req, res) => {
